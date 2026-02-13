@@ -1084,7 +1084,7 @@ export function registerSettings() {
                         cell.style.gap = "12px";
                         // 版本徽标容器（整体可点击跳转最新版本）
                         const versionLink = document.createElement("a");
-                        versionLink.href = "https://github.com/yawiii/comfyui_prompt_assistant/releases/latest";
+                        versionLink.href = "https://github.com/yawiii/ComfyUI-Prompt-Assistant/releases/latest";
                         versionLink.target = "_blank";
                         versionLink.style.textDecoration = "none";
                         versionLink.style.display = "flex";
@@ -1150,14 +1150,14 @@ export function registerSettings() {
 
                         // GitHub 徽标
                         const authorTag = document.createElement("a");
-                        authorTag.href = "https://github.com/yawiii/comfyui_prompt_assistant";
+                        authorTag.href = "https://github.com/yawiii/ComfyUI-Prompt-Assistant";
                         authorTag.target = "_blank";
                         authorTag.style.textDecoration = "none";
                         authorTag.style.display = "flex";
                         authorTag.style.alignItems = "center";
                         const authorBadge = document.createElement("img");
                         authorBadge.alt = "Static Badge";
-                        authorBadge.src = "https://img.shields.io/github/stars/yawiii/comfyui_prompt_assistant?style=flat&logo=github&logoColor=%23292F34&label=Yawiii&labelColor=%23FFFFFF&color=blue";
+                        authorBadge.src = "https://img.shields.io/github/stars/yawiii/ComfyUI-Prompt-Assistant?style=flat&logo=github&logoColor=%23292F34&label=Yawiii&labelColor=%23FFFFFF&color=blue";
                         authorBadge.style.display = "block";
                         authorBadge.style.height = "20px";
                         authorTag.appendChild(authorBadge);
