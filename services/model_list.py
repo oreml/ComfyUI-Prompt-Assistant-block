@@ -165,7 +165,10 @@ def _fetch_ollama_models(base_url: str) -> Dict:
             'User-Agent': f'comfyui-prompt-assistant/1.0 ({platform.machine()} {platform.system().lower()}) Python/{platform.python_version()}'
         }
         
-        response = httpx.get(url, headers=headers, timeout=10.0)
+        # 创建禁用代理的客户端，避免系统代理干扰localhost请求
+        # 这是502错误的常见原因：系统代理无法正确转发localhost请求
+        with httpx.Client(proxy=None, trust_env=False) as client:
+            response = client.get(url, headers=headers, timeout=10.0)
         
         if response.status_code == 404:
             return {
@@ -177,6 +180,11 @@ def _fetch_ollama_models(base_url: str) -> Dict:
             return {
                 "success": False,
                 "error": f"Ollama返回400错误。详情: {error_detail}"
+            }
+        elif response.status_code == 502:
+            return {
+                "success": False,
+                "error": f"Ollama返回错误 (HTTP 502): 网关错误，请检查Ollama服务是否正常运行"
             }
         elif response.status_code != 200:
             return {

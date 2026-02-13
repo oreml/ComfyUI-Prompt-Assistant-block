@@ -15,7 +15,7 @@ class UIToolkit {
     static #statusTips = new Map(); // Map<buttonElement, tipElement>
 
     // 支持的输入字段ID
-    static VALID_INPUT_IDS = ["text", "text_positive", "text_negative", "text_g", "text_l"];
+    static VALID_INPUT_IDS = ["text", "text_positive", "text_negative", "text_g", "text_l", "prompt", "string"];
 
     // 状态文本管理
     static STATUS_TEXTS = {
@@ -41,16 +41,18 @@ class UIToolkit {
         let isValid = false;
         let reason = '';
 
+        const widgetName = (widget.name || widget.id || '').toLowerCase();
+
         // 方法1: 标准文本输入控件（传统litegraph模式）
         if (widget.inputEl && widget.inputEl.tagName === "TEXTAREA" &&
-            this.VALID_INPUT_IDS.includes(widget.name)) {
+            (this.VALID_INPUT_IDS.includes(widget.name) || widgetName.includes('prompt'))) {
             isValid = true;
             reason = 'litegraph textarea matched';
         }
-        // 方法2: Note节点特殊输入
+        // 方法2: Note节点或带文本框的特殊输入
         else if (widget.element && widget.element.tagName === "TEXTAREA") {
             isValid = true;
-            reason = 'Note textarea matched';
+            reason = 'Note/Element textarea matched';
         }
         // 方法3: Markdown Note节点特殊输入（Tiptap编辑器）
         else if (this.isMarkdownNoteInput(widget)) {
@@ -65,18 +67,22 @@ class UIToolkit {
 
         // ---可见性检测补救---
         // 如果基本检测通过，但元素本身是隐藏的，则视为无效
+        // 注意：有些节点的 textarea 可能在初始化时 display:none，随后被 ComfyUI 脚本显示
         if (isValid) {
             const element = widget.inputEl || widget.element;
             if (element && !this.isElementVisible(element)) {
-                isValid = false;
-                reason += ' (but element is hidden)';
+                // 如果是标准 textarea，尝试检查父级可见性，或者放宽判断（有些节点在后台渲染）
+                const isMarkdown = this.isMarkdownNoteInput(widget);
+                if (!isMarkdown) {
+                    isValid = false;
+                    reason += ' (but element is hidden)';
+                }
             }
         }
 
-        if (debug) {
-            const widgetName = widget.name || widget.id || 'unknown';
+        if (debug || (node && node.id === 74)) {
             const nodeType = node?.type || widget.node?.type || 'unknown';
-            logger.debug(`[isValidInput] 控件: ${widgetName} | 节点类型: ${nodeType} | 有效: ${isValid} | 原因: ${reason}`);
+            logger.debug(`[isValidInput] 节点[${node?.id || '?'}] | 控件: ${widget.name || '?'}| 类型: ${nodeType} | 有效: ${isValid} | 原因: ${reason}`);
         }
 
         return isValid;
@@ -103,16 +109,19 @@ class UIToolkit {
             'PreviewAny',       // Preview as Text节点（实际类型）
             'PreviewTextNode',  // Preview节点可能的其他名称
             'Show any [Crystools]',
+            'CLIPTextEncode',   // 显式包含 CLIP 相关
+            'CLIPTextEncodeSDXL',
             // 添加其他支持的节点类型
         ];
 
         // 检查节点类型
-        if (supportedNodeTypes.includes(nodeRef.type)) {
+        if (supportedNodeTypes.includes(nodeRef.type) || nodeRef.type?.includes('CLIP')) {
             return true;
         }
 
         // 检查控件名称是否为有效输入
-        if (this.VALID_INPUT_IDS.includes(widget.name)) {
+        const widgetName = (widget.name || widget.id || '').toLowerCase();
+        if (this.VALID_INPUT_IDS.includes(widget.name) || widgetName.includes('prompt')) {
             return true;
         }
 

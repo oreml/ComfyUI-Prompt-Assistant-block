@@ -190,7 +190,10 @@ class LLMService(OpenAICompatibleService):
             
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(final_timeout, connect=10.0, read=final_timeout),
-                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10)
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+                # 关键修复：禁用系统环境变量代理配置
+                # 避免 HTTP_PROXY/HTTPS_PROXY 导致 localhost 请求被代理拦截返回 502
+                trust_env=False
             ) as client:
                 full_content = ""
                 

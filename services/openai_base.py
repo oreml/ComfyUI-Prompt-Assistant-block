@@ -449,8 +449,8 @@ class OpenAICompatibleService(BaseAPIService):
                 "keep_alive": 0
             }
             
-            # 创建临时客户端（卸载操作不需要复用）
-            async with httpx.AsyncClient(timeout=5.0) as client:
+            # 创建临时客户端（卸载操作不需要复用，禁用代理避免localhost请求被拦截）
+            async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
                 response = await client.post(url, json=payload)
                 if response.status_code == 200:
                     from ..utils.common import PROCESS_PREFIX

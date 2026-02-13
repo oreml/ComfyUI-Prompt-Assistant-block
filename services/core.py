@@ -81,6 +81,9 @@ class HTTPClientPool:
             'verify': verify_ssl,
             'follow_redirects': True,
             'http2': False,
+            # 关键修复：禁用系统环境变量代理配置
+            # 避免 HTTP_PROXY/HTTPS_PROXY 导致 localhost 请求被代理拦截返回 502
+            'trust_env': False,
             # 设置连接池保持连接
             'limits': httpx.Limits(max_keepalive_connections=10, max_connections=20, keepalive_expiry=60.0)
         }

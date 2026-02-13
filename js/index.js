@@ -293,6 +293,9 @@ app.registerExtension({
 
         // 【新增】如果需要重置标记（子图切换场景），立即扫描现有节点
         if (resetFlags) {
+            // 切换图时，先清理当前 UI 实例（不清理缓存），防止 ID 冲突的残留
+            promptAssistant.cleanup(null, true);
+
             const isVueMode = typeof LiteGraph !== 'undefined' && LiteGraph.vueNodesMode === true;
             const delay = isVueMode ? 300 : 100;
 
@@ -313,7 +316,8 @@ app.registerExtension({
                 });
 
                 if (nodes.length > 0) {
-                    logger.debug(`[graphSwitch] 自动扫描完成 | 节点数: ${nodes.length}`);
+                    const gId = graph.id || graph._workflow_id || 'main';
+                    logger.debug(`[graphSwitch] 自动扫描完成 | 节点数: ${nodes.length} | Graph: ${gId}`);
                 }
             }, delay);
         }
@@ -358,7 +362,7 @@ app.registerExtension({
 
     // ---其他方法保持不变---
     async _setupOtherMethods() {
-
+        const self = this;
         // 仅保留工作流ID识别功能，不处理工作流切换事件
         try {
             const LGraph = app.graph.constructor;
@@ -392,7 +396,7 @@ app.registerExtension({
                         if (app.graph && app.graph._nodes) {
                             app.graph._nodes.forEach(node => {
                                 if (node && node.id !== -1) {
-                                    this._handleNodeActive(node, { delay: false });
+                                    self._handleNodeActive(node, { delay: false });
                                 }
                             });
                         }
