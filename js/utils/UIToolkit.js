@@ -492,6 +492,7 @@ class UIToolkit {
             anchorButton: e.currentTarget,
             nodeId: widget.nodeId,
             inputId: widget.inputId,
+            widgetKey: widget.widgetKey,
             buttonInfo: buttonInfo,
             onClose: () => {
                 // 弹窗关闭时，如果当前按钮仍为激活状态，则重置
@@ -718,9 +719,8 @@ class UIToolkit {
     /**
      * 写入内容到输入框
      */
-    static writeToInput(content, nodeId, inputId, options = { highlight: true, focus: false }) {
-        const mappingKey = `${nodeId}_${inputId}`;
-        const mapping = window.PromptAssistantInputWidgetMap?.[mappingKey];
+    static writeToInput(content, nodeId, inputId, options = { highlight: true, focus: false, widgetKey: null }) {
+        const mapping = this._findMapping(nodeId, inputId, options.widgetKey);
 
         if (mapping && mapping.inputEl) {
             const inputEl = mapping.inputEl;
@@ -774,9 +774,8 @@ class UIToolkit {
     /**
      * 在光标位置插入内容
      */
-    static insertAtCursor(content, nodeId, inputId, options = { highlight: true, keepFocus: true }) {
-        const mappingKey = `${nodeId}_${inputId}`;
-        const mapping = window.PromptAssistantInputWidgetMap?.[mappingKey];
+    static insertAtCursor(content, nodeId, inputId, options = { highlight: true, keepFocus: true, widgetKey: null }) {
+        const mapping = this._findMapping(nodeId, inputId, options.widgetKey);
 
         if (mapping && mapping.inputEl) {
             const inputEl = mapping.inputEl;
@@ -855,6 +854,41 @@ class UIToolkit {
             logger.error(`内容插入 | 结果:失败 | 节点:${nodeId} | 输入框:${inputId} | 原因:找不到输入框`);
             return false;
         }
+    }
+
+    /**
+     * 根据 nodeID 和 inputID 查找映射关系的辅助方法
+     * 优先使用 widgetKey，如果未提供则尝试匹配唯一映射
+     */
+    static _findMapping(nodeId, inputId, widgetKey = null) {
+        if (widgetKey) {
+            const mapping = window.PromptAssistantInputWidgetMap?.[widgetKey];
+            if (mapping) return mapping;
+        }
+
+        // 尝试使用旧格式 key
+        const oldKey = `${nodeId}_${inputId}`;
+        const oldMapping = window.PromptAssistantInputWidgetMap?.[oldKey];
+        if (oldMapping) return oldMapping;
+
+        // 如果仍未找到，尝试在所有映射中查找匹配 nodeId 和 inputId 的项
+        // 这在 graphId 无法确定的情况下非常有用
+        const mappings = Object.values(window.PromptAssistantInputWidgetMap || {});
+        const matches = mappings.filter(m =>
+            (m.widget?.nodeId == nodeId && m.widget?.inputId == inputId) ||
+            (m.inputEl && m.inputEl._nodeId == nodeId && m.inputEl._inputId == inputId)
+        );
+
+        if (matches.length === 1) {
+            return matches[0];
+        } else if (matches.length > 1) {
+            logger.warn(`查找映射 | 结果:冲突 | 找到多个匹配项 | 节点:${nodeId} | 输入框:${inputId}`);
+            // 如果有多个匹配，尝试匹配 nodeId 且没有 graphId 的那个（旧版本）
+            const bestMatch = matches.find(m => !m.widgetKey || !m.widgetKey.includes('_'));
+            return bestMatch || matches[0];
+        }
+
+        return null;
     }
 
     /**
