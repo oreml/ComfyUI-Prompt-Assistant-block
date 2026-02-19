@@ -32,7 +32,7 @@ class VLMNodeBase(BaseNode):
         """
         获取所有可用的VLM服务/模型选项列表
         
-        返回格式: ["智谱/glm-4v-flash", "Ollama/llava:Q6_K", ...]
+        返回格式: ["OpenRouter/openai/gpt-4o", "Ollama/llava:Q6_K", ...]
         所有服务显示为"服务名/模型名"格式
         
         返回:
@@ -62,7 +62,7 @@ class VLMNodeBase(BaseNode):
         
         # 如果没有任何选项,返回默认值避免ComfyUI报错
         if not options:
-            options = ["智谱"]
+            options = ["OpenRouter"]
         
         return options
     
@@ -72,11 +72,11 @@ class VLMNodeBase(BaseNode):
         解析"服务名/模型名"格式的字符串
         
         参数:
-            service_model_str: 服务/模型字符串,例如 "智谱/glm-4v-flash"
+            service_model_str: 服务/模型字符串,例如 "OpenRouter/openai/gpt-4o"
         
         返回:
             Tuple[str, Optional[str]]: (service_id, model_name)
-            - service_id: 服务ID (如 'zhipu', 'ollama')
+            - service_id: 服务ID (如 'openrouter', 'zhipu', 'ollama')
             - model_name: 模型名称,如果没有则为None
         """
         from ...config_manager import config_manager
@@ -107,7 +107,7 @@ class VLMNodeBase(BaseNode):
         
         参数:
             config_manager: 配置管理器实例
-            provider: Provider标识符(如 'zhipu', 'ollama'等)
+            provider: Provider标识符(如 'openrouter', 'zhipu', 'ollama'等)
         
         返回:
             Provider配置字典,如果未找到则返回 None
@@ -170,7 +170,7 @@ class VLMNodeBase(BaseNode):
         示例:
             result = self._run_async_task(
                 VisionService.analyze_image,
-                "zhipu",
+                "openrouter",
                 image_data=data,
                 request_id=req_id,
                 ...
@@ -232,11 +232,11 @@ class VLMNodeBase(BaseNode):
         示例:
             result = self._run_vision_task(
                 VisionService.analyze_image,
-                "zhipu",
+                "openrouter",
                 image_data=data,
                 request_id=req_id,
                 prompt_content=prompt,
-                custom_provider="zhipu",
+                custom_provider="openrouter",
                 custom_provider_config=config
             )
         """

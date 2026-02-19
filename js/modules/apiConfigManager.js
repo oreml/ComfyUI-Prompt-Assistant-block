@@ -23,7 +23,7 @@ import { APIService } from "../services/api.js";
 
 class APIConfigManager {
     // 预置服务商ID列表（不可编辑/删除）
-    static PRESET_SERVICE_IDS = ['zhipu', 'xFlow', 'ollama'];
+    static PRESET_SERVICE_IDS = ['openrouter', 'zhipu', 'xFlow', 'ollama'];
 
     constructor() {
         // 服务商数据
@@ -1009,6 +1009,15 @@ class APIConfigManager {
         const serviceName = (service.name || '').toLowerCase();
         const serviceId = (service.id || '').toLowerCase();
         const searchText = `${serviceName} ${serviceId}`.toLowerCase();
+
+        // OpenRouter服务检测（首位）
+        if (searchText.includes('openrouter') || searchText.includes('open router')) {
+            links.push({
+                text: '开通OpenRouter API服务',
+                url: 'https://openrouter.ai/',
+                icon: 'pi-star'
+            });
+        }
 
         // 智谱服务检测
         if (searchText.includes('智谱') || searchText.includes('zhipu')) {

@@ -25,7 +25,7 @@ class LLMNodeBase(BaseNode):
         """
         获取所有可用的LLM服务/模型选项列表
         
-        返回格式: ["百度翻译", "智谱/glm-4-flash", "Ollama/qwen3:14b", ...]
+        返回格式: ["百度翻译", "OpenRouter/openai/gpt-4o-mini", "Ollama/qwen3:14b", ...]
         百度翻译服务无模型概念,仅显示服务名
         其他服务显示为"服务名/模型名"格式
         
@@ -57,7 +57,7 @@ class LLMNodeBase(BaseNode):
         
         # 如果没有任何选项,返回默认值避免ComfyUI报错
         if not options:
-            options = ["智谱"]
+            options = ["OpenRouter"]
         
         return options
     
@@ -70,7 +70,7 @@ class LLMNodeBase(BaseNode):
         - 硬编码添加"百度翻译"选项(百度翻译使用独立配置,不在model_services中)
         - 专门用于翻译节点和翻译按钮
         
-        返回格式: ["百度翻译", "智谱/glm-4-flash", "Ollama/qwen3:14b", ...]
+        返回格式: ["百度翻译", "OpenRouter/openai/gpt-4o-mini", "Ollama/qwen3:14b", ...]
         
         返回:
             List[str]: 服务/模型选项列表(包含百度翻译)
@@ -110,11 +110,11 @@ class LLMNodeBase(BaseNode):
         - "百度翻译": 返回 ('baidu', None)
         
         参数:
-            service_model_str: 服务/模型字符串,例如 "智谱/glm-4-flash" 或 "Google 翻译"
+            service_model_str: 服务/模型字符串,例如 "OpenRouter/openai/gpt-4o-mini" 或 "Google 翻译"
         
         返回:
             Tuple[str, Optional[str]]: (service_id, model_name)
-            - service_id: 服务ID (如 'zhipu', 'google', 'baidu')
+            - service_id: 服务ID (如 'openrouter', 'zhipu', 'google', 'baidu')
             - model_name: 模型名称,如果没有则为None
         """
         from ...config_manager import config_manager
@@ -151,7 +151,7 @@ class LLMNodeBase(BaseNode):
         
         参数:
             config_manager: 配置管理器实例
-            provider: Provider标识符(如 'zhipu', 'ollama'等)
+            provider: Provider标识符(如 'openrouter', 'zhipu', 'ollama'等)
         
         返回:
             Provider配置字典,如果未找到则返回 None

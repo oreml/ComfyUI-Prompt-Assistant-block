@@ -5,7 +5,7 @@
 设计原则:
 - 只认模型特征,不认服务商(Ollama除外,因其使用原生API)
 - 按参数类型分组,而非按服务商分组
-- 支持主流平台:智谱/Qwen/DeepSeek/Gemini/Grok/Ollama
+- 支持主流平台:OpenRouter/智谱/Qwen/DeepSeek/Gemini/Grok/Ollama
 - 保留400错误自动降级机制(在openai_base.py中)
 """
 
@@ -22,7 +22,7 @@ THINKING_CONTROL_RULES: List[Dict[str, Any]] = [
         "description": "智谱GLM-4.5/4.6系列",
         "patterns": [r"glm[-_/.]?4\.(5|6)"],
         "params": {"thinking": {"type": "disabled"}},
-        "sources": ["智谱官方API", "各聚合平台"]
+        "sources": ["OpenRouter", "智谱官方API", "各聚合平台"]
     },
     {
         "name": "qwen3_enable_thinking",
@@ -140,7 +140,7 @@ def build_thinking_suppression(provider: str, model: str, disable_thinking: bool
         >>> build_thinking_suppression("ollama", "qwen3-thinking", disable_thinking=False)
         {"think": False}  # 启用思考
         
-        >>> build_thinking_suppression("zhipu", "glm-4.5")
+        >>> build_thinking_suppression("openrouter", "glm-4.5")
         {"thinking": {"type": "disabled"}}
         
         >>> build_ thinking_suppression("custom", "gemini-2.5-pro")

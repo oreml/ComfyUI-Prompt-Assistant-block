@@ -10,6 +10,69 @@
     },
     "model_services": [
         {
+            "id": "openrouter",
+            "type": "openai_compatible",
+            "name": "OpenRouter",
+            "description": "統一訪問多個AI模型",
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key": "",
+            "disable_thinking": true,
+            "enable_advanced_params": true,
+            "filter_thinking_output": true,
+            "llm_models": [
+                {
+                    "name": "openai/gpt-4o-mini",
+                    "display_name": "GPT-4o Mini",
+                    "is_default": true,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                    "top_p": 0.9
+                },
+                {
+                    "name": "anthropic/claude-3.5-sonnet",
+                    "display_name": "Claude 3.5 Sonnet",
+                    "is_default": false,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                    "top_p": 0.9
+                },
+                {
+                    "name": "google/gemini-pro-1.5",
+                    "display_name": "Gemini Pro 1.5",
+                    "is_default": false,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                    "top_p": 0.9
+                }
+            ],
+            "vlm_models": [
+                {
+                    "name": "openai/gpt-4o",
+                    "display_name": "GPT-4o",
+                    "is_default": true,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                    "top_p": 0.9
+                },
+                {
+                    "name": "anthropic/claude-3.5-sonnet",
+                    "display_name": "Claude 3.5 Sonnet",
+                    "is_default": false,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                    "top_p": 0.9
+                },
+                {
+                    "name": "google/gemini-pro-vision-1.5",
+                    "display_name": "Gemini Pro Vision 1.5",
+                    "is_default": false,
+                    "temperature": 0.7,
+                    "max_tokens": 1024,
+                    "top_p": 0.9
+                }
+            ]
+        },
+        {
             "id": "zhipu",
             "type": "openai_compatible",
             "name": "智谱",
@@ -104,12 +167,12 @@
     ],
     "current_services": {
         "llm": {
-            "service": "zhipu",
-            "model": "glm-4.5-flash"
+            "service": "openrouter",
+            "model": "openai/gpt-4o-mini"
         },
         "vlm": {
-            "service": "zhipu",
-            "model": "glm-4v-flash"
+            "service": "openrouter",
+            "model": "openai/gpt-4o"
         },
         "translate": {
             "service": "google",

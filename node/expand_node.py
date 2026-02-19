@@ -56,7 +56,7 @@ class PromptExpand(LLMNodeBase):
         
         # ---动态获取LLM服务/模型列表---
         service_options = cls.get_llm_service_options()
-        default_service = service_options[0] if service_options else "智谱"
+        default_service = service_options[0] if service_options else "OpenRouter"
 
         return {
             "required": {

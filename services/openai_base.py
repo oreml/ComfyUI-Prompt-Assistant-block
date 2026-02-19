@@ -49,7 +49,7 @@ def filter_thinking_content(text: str) -> str:
 class OpenAICompatibleService(BaseAPIService):
     """
     OpenAI兼容API服务基类
-    处理所有OpenAI格式的API请求（智谱、硅基流动、302.ai、Ollama等）
+    处理所有OpenAI格式的API请求（OpenRouter、智谱、硅基流动、302.ai、Ollama等）
     """
     
     # ---已知的API端点路径（用于智能检测）---

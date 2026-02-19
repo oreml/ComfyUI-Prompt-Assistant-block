@@ -990,8 +990,8 @@ class MigrationTool:
         
         提取的 API Key:
         - baidu_translate: app_id, secret_key
-        - llm.providers: zhipu, siliconflow, custom 的 api_key
-        - vlm.providers: zhipu, siliconflow, custom 的 api_key
+        - llm.providers: openrouter, zhipu, siliconflow, custom 的 api_key
+        - vlm.providers: openrouter, zhipu, siliconflow, custom 的 api_key
         """
         try:
             # 1. 检查是否需要迁移
