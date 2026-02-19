@@ -4375,7 +4375,7 @@ class TagManager {
 
         // 获取所有标签页，重新排序将"⭐️"放在最前面
         const normalTabs = Object.keys(tagData);
-        const allTabs = ['⭐️', ...normalTabs, '翻譯緩存', '已插入'];
+        const allTabs = ['⭐️', ...normalTabs, '翻譯單字緩存', '已插入'];
         // 记忆上次激活的标签页
         let activeTabIndex = 1; // 默认第二个标签（即tags.json的第一个类别）
         const lastCategory = this.getLastActiveTab();
@@ -4431,8 +4431,8 @@ class TagManager {
                         this._loadCategoryContent(content, userTagData, 'favorites');
                     } else if (contentId === '已插入') {
                         this._loadInsertedTagsContent(content);
-                    } else if (contentId === '翻譯緩存') {
-                        this._loadTranslateCacheContent(content, nodeId, inputId);
+                    } else if (contentId === '翻譯單字緩存') {
+                        this._loadTranslateWordCacheContent(content, nodeId, inputId);
                     }
                     // 对于普通标签页，仅在首次加载
                     else if (content.getAttribute('data-loaded') !== 'true') {
@@ -4460,7 +4460,7 @@ class TagManager {
             this.eventCleanups.push(tabClickCleanup);
 
             // 添加右键菜单事件（特殊分类除外）
-            const specialCategories = ['⭐️', 'favorites', '翻譯緩存', '已插入'];
+            const specialCategories = ['⭐️', 'favorites', '翻譯單字緩存', '已插入'];
             if (!specialCategories.includes(category)) {
                 const tabContextMenuCleanup = EventManager.addDOMListener(tab, 'contextmenu', (e) => {
                     e.preventDefault();
@@ -5397,6 +5397,204 @@ class TagManager {
                 }
             }
         });
+    }
+
+    /**
+     * 加载翻译单字缓存标签页内容
+     * 从翻译缓存中提取按逗号分隔的单字及其翻译
+     */
+    static _loadTranslateWordCacheContent(content, nodeId, inputId) {
+        // 清空现有内容
+        content.innerHTML = '';
+        content.setAttribute('data-loaded', 'true');
+
+        // 获取所有翻译缓存
+        const cache = TranslateCacheService.getAllTranslateCache();
+        
+        // 提取所有单字及其翻译
+        const wordCache = new Map();
+        
+        cache.forEach((translated, source) => {
+            // 按逗號、中文逗號、頓號分割
+            const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            
+            // 確保分割後的數量一致
+            if (sourceWords.length === translatedWords.length && sourceWords.length > 0) {
+                sourceWords.forEach((word, index) => {
+                    const translatedWord = translatedWords[index];
+                    if (word && translatedWord) {
+                        // 如果單字已存在，保留較長的翻譯（通常更完整）
+                        if (!wordCache.has(word) || wordCache.get(word).length < translatedWord.length) {
+                            wordCache.set(word, translatedWord);
+                        }
+                    }
+                });
+            }
+        });
+        
+        if (wordCache.size === 0) {
+            // 显示空状态
+            const emptyState = document.createElement('div');
+            emptyState.className = 'tag_empty_state';
+            emptyState.innerHTML = `
+                <div class="empty_icon">📝</div>
+                <div class="empty_text">暫無翻譯單字緩存</div>
+                <div class="empty_hint">翻譯緩存中的單字會自動提取到這裡</div>
+            `;
+            content.appendChild(emptyState);
+            return;
+        }
+
+        // 创建搜索框
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'translate_cache_search_container';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'translate_cache_search_input';
+        searchInput.placeholder = '搜索翻譯單字緩存...';
+        searchInput.addEventListener('input', (e) => {
+            this._filterTranslateWordCache(e.target.value, content, nodeId, inputId);
+        });
+        searchContainer.appendChild(searchInput);
+        content.appendChild(searchContainer);
+
+        // 创建统计信息
+        const statsDiv = document.createElement('div');
+        statsDiv.className = 'translate_cache_stats';
+        statsDiv.textContent = `共 ${wordCache.size} 個單字`;
+        content.appendChild(statsDiv);
+
+        // 创建缓存列表容器（使用 grid 佈局）
+        const listContainer = document.createElement('div');
+        listContainer.className = 'translate_cache_list translate_word_cache_grid';
+        content.appendChild(listContainer);
+
+        // 渲染单字缓存列表
+        this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
+    }
+
+    /**
+     * 渲染翻译单字缓存列表
+     */
+    static _renderTranslateWordCacheList(wordCache, container, nodeId, inputId) {
+        container.innerHTML = '';
+        
+        // 按單字排序（字母順序）
+        const sortedEntries = Array.from(wordCache.entries()).sort((a, b) => {
+            return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
+        });
+        
+        sortedEntries.forEach(([word, translated]) => {
+            const item = document.createElement('div');
+            item.className = 'translate_cache_item';
+            item.dataset.source = word;
+            item.dataset.translated = translated;
+            
+            // 创建原文显示区域（單字）
+            const sourceDiv = document.createElement('div');
+            sourceDiv.className = 'translate_cache_source';
+            sourceDiv.textContent = word;
+            sourceDiv.title = word;
+            
+            // 创建译文显示区域
+            const translatedDiv = document.createElement('div');
+            translatedDiv.className = 'translate_cache_translated';
+            translatedDiv.textContent = translated;
+            translatedDiv.title = translated;
+            
+            // 创建操作按钮区域
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'translate_cache_actions';
+            
+            // 插入原文按钮
+            const insertSourceBtn = document.createElement('button');
+            insertSourceBtn.className = 'translate_cache_insert_btn';
+            insertSourceBtn.textContent = '插入原文';
+            insertSourceBtn.onclick = (e) => {
+                e.stopPropagation();
+                this._insertTranslateCacheText(word, nodeId, inputId);
+            };
+            
+            // 插入译文按钮
+            const insertTranslatedBtn = document.createElement('button');
+            insertTranslatedBtn.className = 'translate_cache_insert_btn';
+            insertTranslatedBtn.textContent = '插入譯文';
+            insertTranslatedBtn.onclick = (e) => {
+                e.stopPropagation();
+                this._insertTranslateCacheText(translated, nodeId, inputId);
+            };
+            
+            actionsDiv.appendChild(insertSourceBtn);
+            actionsDiv.appendChild(insertTranslatedBtn);
+            
+            item.appendChild(sourceDiv);
+            item.appendChild(translatedDiv);
+            item.appendChild(actionsDiv);
+            
+            container.appendChild(item);
+        });
+    }
+
+    /**
+     * 过滤翻译单字缓存
+     */
+    static _filterTranslateWordCache(keyword, content, nodeId, inputId) {
+        const listContainer = content.querySelector('.translate_word_cache_grid');
+        if (!listContainer) return;
+        
+        // 获取所有翻译缓存
+        const cache = TranslateCacheService.getAllTranslateCache();
+        
+        // 提取所有单字及其翻译
+        const wordCache = new Map();
+        
+        cache.forEach((translated, source) => {
+            const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            
+            if (sourceWords.length === translatedWords.length && sourceWords.length > 0) {
+                sourceWords.forEach((word, index) => {
+                    const translatedWord = translatedWords[index];
+                    if (word && translatedWord) {
+                        if (!wordCache.has(word) || wordCache.get(word).length < translatedWord.length) {
+                            wordCache.set(word, translatedWord);
+                        }
+                    }
+                });
+            }
+        });
+        
+        if (!keyword || keyword.trim() === '') {
+            // 显示所有单字缓存
+            this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
+            
+            // 更新統計信息為全部
+            const statsDiv = content.querySelector('.translate_cache_stats');
+            if (statsDiv) {
+                statsDiv.textContent = `共 ${wordCache.size} 個單字`;
+            }
+            return;
+        }
+        
+        // 搜索单字缓存（搜索原文或译文）
+        const keywordLower = keyword.toLowerCase();
+        const filteredCache = new Map();
+        
+        wordCache.forEach((translated, word) => {
+            if (word.toLowerCase().includes(keywordLower) || 
+                translated.toLowerCase().includes(keywordLower)) {
+                filteredCache.set(word, translated);
+            }
+        });
+        
+        this._renderTranslateWordCacheList(filteredCache, listContainer, nodeId, inputId);
+        
+        // 更新統計信息為搜索結果
+        const statsDiv = content.querySelector('.translate_cache_stats');
+        if (statsDiv) {
+            statsDiv.textContent = `找到 ${filteredCache.size} 個單字 (共 ${wordCache.size} 個)`;
+        }
     }
 }
 
