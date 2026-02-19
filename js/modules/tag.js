@@ -5487,51 +5487,42 @@ class TagManager {
         
         sortedEntries.forEach(([word, translated]) => {
             const item = document.createElement('div');
-            item.className = 'translate_cache_item';
+            item.className = 'translate_cache_item translate_word_cache_item';
             item.dataset.source = word;
             item.dataset.translated = translated;
             
-            // 创建原文显示区域（單字）
-            const sourceDiv = document.createElement('div');
-            sourceDiv.className = 'translate_cache_source';
-            sourceDiv.textContent = word;
-            sourceDiv.title = word;
-            
-            // 创建译文显示区域
-            const translatedDiv = document.createElement('div');
-            translatedDiv.className = 'translate_cache_translated';
-            translatedDiv.textContent = translated;
-            translatedDiv.title = translated;
-            
-            // 创建操作按钮区域
-            const actionsDiv = document.createElement('div');
-            actionsDiv.className = 'translate_cache_actions';
-            
-            // 插入原文按钮
-            const insertSourceBtn = document.createElement('button');
-            insertSourceBtn.className = 'translate_cache_insert_btn';
-            insertSourceBtn.textContent = '插入原文';
-            insertSourceBtn.onclick = (e) => {
-                e.stopPropagation();
+            // 點擊整個 item 插入原文
+            item.style.cursor = 'pointer';
+            item.onclick = () => {
                 this._insertTranslateCacheText(word, nodeId, inputId);
             };
             
-            // 插入译文按钮
-            const insertTranslatedBtn = document.createElement('button');
-            insertTranslatedBtn.className = 'translate_cache_insert_btn';
-            insertTranslatedBtn.textContent = '插入譯文';
-            insertTranslatedBtn.onclick = (e) => {
-                e.stopPropagation();
-                this._insertTranslateCacheText(translated, nodeId, inputId);
-            };
+            // 创建文字容器，顯示「原文/翻譯」格式
+            const textContainer = document.createElement('div');
+            textContainer.className = 'translate_word_cache_text';
             
-            actionsDiv.appendChild(insertSourceBtn);
-            actionsDiv.appendChild(insertTranslatedBtn);
+            // 原文部分
+            const sourceSpan = document.createElement('span');
+            sourceSpan.className = 'translate_word_cache_source';
+            sourceSpan.textContent = word;
+            sourceSpan.title = word;
             
-            item.appendChild(sourceDiv);
-            item.appendChild(translatedDiv);
-            item.appendChild(actionsDiv);
+            // 分隔符
+            const separator = document.createElement('span');
+            separator.className = 'translate_word_cache_separator';
+            separator.textContent = ' / ';
             
+            // 翻譯部分
+            const translatedSpan = document.createElement('span');
+            translatedSpan.className = 'translate_word_cache_translated';
+            translatedSpan.textContent = translated;
+            translatedSpan.title = translated;
+            
+            textContainer.appendChild(sourceSpan);
+            textContainer.appendChild(separator);
+            textContainer.appendChild(translatedSpan);
+            
+            item.appendChild(textContainer);
             container.appendChild(item);
         });
     }

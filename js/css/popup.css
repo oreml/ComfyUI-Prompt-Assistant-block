@@ -1495,12 +1495,16 @@
     scrollbar-color: color-mix(in srgb, var(--p-button-text-secondary-color, rgba(255, 255, 255, 0.5)), transparent 50%) transparent;
 }
 
-/* 翻譯單字緩存 Grid 佈局 */
+/* 翻譯單字緩存 Grid 佈局 - 參考 tag_category_container */
 .translate_word_cache_grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 12px;
-    padding: 12px;
+    flex: 1;
+    overflow: visible;
+    padding: 4px;
+    position: relative;
+    min-height: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
 }
 
 /* 翻譯緩存項目 */
@@ -1513,12 +1517,28 @@
     transition: all 0.2s;
 }
 
-/* Grid 佈局中的翻譯單字緩存項目 */
+/* Grid 佈局中的翻譯單字緩存項目 - 參考 tag_item */
 .translate_word_cache_grid .translate_cache_item {
-    margin-bottom: 0;
-    display: flex;
-    flex-direction: column;
-    min-height: 120px;
+    display: inline-block;
+    margin: 4px;
+    padding: 4px 10px;
+    background-color: color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    z-index: 1;
+    user-select: none;
+    border: none;
+    min-height: auto;
+}
+
+.translate_word_cache_grid .translate_cache_item:hover {
+    background-color: color-mix(in srgb, var(--p-primary-500), transparent 84%);
+    border-color: rgba(255, 255, 255, 0.2);
+    z-index: 10210;
+    transform: none;
+    box-shadow: none;
 }
 
 .translate_cache_item:hover {
@@ -1543,26 +1563,30 @@
     scrollbar-color: color-mix(in srgb, var(--p-button-text-secondary-color, rgba(255, 255, 255, 0.5)), transparent 50%) transparent;
 }
 
-/* Grid 佈局中的原文和譯文顯示 */
-.translate_word_cache_grid .translate_cache_source,
-.translate_word_cache_grid .translate_cache_translated {
-    flex: 1;
-    margin-bottom: 6px;
-    text-align: center;
+/* 翻譯單字緩存文字容器 - 參考 tag_item_text */
+.translate_word_cache_text {
+    font-size: 14px;
+    color: var(--p-inputtext-color);
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 40px;
+    white-space: nowrap;
 }
 
-.translate_word_cache_grid .translate_cache_source {
+/* 翻譯單字緩存原文 */
+.translate_word_cache_source {
     font-weight: 600;
-    font-size: 14px;
 }
 
-.translate_word_cache_grid .translate_cache_translated {
-    font-size: 13px;
-    color: var(--p-text-muted-color, rgba(255, 255, 255, 0.7));
+/* 翻譯單字緩存分隔符 */
+.translate_word_cache_separator {
+    margin: 0 4px;
+    opacity: 0.6;
+}
+
+/* 翻譯單字緩存翻譯 */
+.translate_word_cache_translated {
+    opacity: 0.8;
 }
 
 .translate_cache_source {
