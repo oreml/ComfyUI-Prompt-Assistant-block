@@ -24,7 +24,7 @@ const CACHE_CONFIG = {
 
     // 翻译缓存配置
     TRANSLATE_CACHE_KEY: "PromptAssistant_translate_cache",
-    MAX_TRANSLATE_CACHE: 200,  // 最多保存的翻译缓存条数
+    MAX_TRANSLATE_CACHE: 500,  // 最多保存的翻译缓存条数
 };
 
 /**
@@ -1203,6 +1203,8 @@ class TranslateCacheService {
             const cache = this.getAllTranslateCache();
             const stats = {
                 total: cache.size,
+                maxSize: CACHE_CONFIG.MAX_TRANSLATE_CACHE,
+                usage: ((cache.size / CACHE_CONFIG.MAX_TRANSLATE_CACHE) * 100).toFixed(1) + '%',
                 sourceTextLengths: 0,
                 translatedTextLengths: 0
             };
@@ -1213,11 +1215,130 @@ class TranslateCacheService {
                 stats.translatedTextLengths += translated.length;
             }
 
-            logger.debug(`翻译缓存 | 获取统计 | 总数:${stats.total} | 原文总长度:${stats.sourceTextLengths} | 译文总长度:${stats.translatedTextLengths}`);
+            logger.debug(`翻译缓存 | 获取统计 | 总数:${stats.total} | 使用率:${stats.usage} | 原文总长度:${stats.sourceTextLengths} | 译文总长度:${stats.translatedTextLengths}`);
             return stats;
         } catch (error) {
             logger.error(`翻译缓存 | 获取统计失败 | 错误:${error.message}`);
-            return { total: 0, sourceTextLengths: 0, translatedTextLengths: 0 };
+            return { total: 0, maxSize: CACHE_CONFIG.MAX_TRANSLATE_CACHE, usage: '0%', sourceTextLengths: 0, translatedTextLengths: 0 };
+        }
+    }
+
+    /**
+     * 搜索翻译缓存（支持模糊匹配）
+     */
+    static searchTranslateCache(keyword) {
+        try {
+            if (!keyword || keyword.trim() === '') {
+                return [];
+            }
+
+            const cache = this.getAllTranslateCache();
+            const results = [];
+            const lowerKeyword = keyword.toLowerCase();
+            
+            for (const [source, translated] of cache.entries()) {
+                if (source.toLowerCase().includes(lowerKeyword) || 
+                    translated.toLowerCase().includes(lowerKeyword)) {
+                    results.push({
+                        source: source,
+                        translated: translated
+                    });
+                }
+            }
+
+            logger.debug(`翻译缓存 | 搜索 | 关键词:${keyword} | 结果数:${results.length}`);
+            return results;
+        } catch (error) {
+            logger.error(`翻译缓存 | 搜索失败 | 错误:${error.message}`);
+            return [];
+        }
+    }
+
+    /**
+     * 批量删除翻译缓存
+     */
+    static deleteTranslateCacheEntries(keys) {
+        try {
+            if (!keys || !Array.isArray(keys) || keys.length === 0) {
+                logger.warn("翻译缓存 | 批量删除 | 无效的键列表");
+                return 0;
+            }
+
+            const cache = this.getAllTranslateCache();
+            let deleted = 0;
+            keys.forEach(key => {
+                if (cache.delete(key)) {
+                    deleted++;
+                }
+            });
+
+            if (deleted > 0) {
+                this.saveAllTranslateCache(cache);
+                logger.debug(`翻译缓存 | 批量删除 | 删除数量:${deleted}`);
+            }
+
+            return deleted;
+        } catch (error) {
+            logger.error(`翻译缓存 | 批量删除失败 | 错误:${error.message}`);
+            return 0;
+        }
+    }
+
+    /**
+     * 导出翻译缓存为 JSON
+     */
+    static exportTranslateCache() {
+        try {
+            const cache = this.getAllTranslateCache();
+            const exportData = Array.from(cache.entries()).map(([source, translated]) => ({
+                source: source,
+                translated: translated
+            }));
+
+            logger.debug(`翻译缓存 | 导出 | 数量:${exportData.length}`);
+            return exportData;
+        } catch (error) {
+            logger.error(`翻译缓存 | 导出失败 | 错误:${error.message}`);
+            return [];
+        }
+    }
+
+    /**
+     * 导入翻译缓存
+     */
+    static importTranslateCache(data) {
+        try {
+            if (!data || !Array.isArray(data)) {
+                logger.warn("翻译缓存 | 导入 | 无效的数据格式");
+                return 0;
+            }
+
+            const cache = this.getAllTranslateCache();
+            let imported = 0;
+            
+            data.forEach(item => {
+                if (item && item.source && item.translated) {
+                    cache.set(item.source, item.translated);
+                    imported++;
+                }
+            });
+
+            if (imported > 0) {
+                // 如果导入后超过最大限制，删除最旧的条目
+                if (cache.size > CACHE_CONFIG.MAX_TRANSLATE_CACHE) {
+                    const entries = Array.from(cache.entries());
+                    const newEntries = entries.slice(-CACHE_CONFIG.MAX_TRANSLATE_CACHE);
+                    cache.clear();
+                    newEntries.forEach(([key, value]) => cache.set(key, value));
+                }
+                this.saveAllTranslateCache(cache);
+                logger.debug(`翻译缓存 | 导入 | 导入数量:${imported}`);
+            }
+
+            return imported;
+        } catch (error) {
+            logger.error(`翻译缓存 | 导入失败 | 错误:${error.message}`);
+            return 0;
         }
     }
 }

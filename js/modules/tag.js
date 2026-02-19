@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { CacheService, TagCacheService } from "../services/cache.js";
+import { CacheService, TagCacheService, TranslateCacheService } from "../services/cache.js";
 import { UIToolkit } from "../utils/UIToolkit.js";
 import { PopupManager } from "../utils/popupManager.js";
 import { ResourceManager } from "../utils/resourceManager.js";
@@ -4375,7 +4375,7 @@ class TagManager {
 
         // 获取所有标签页，重新排序将"⭐️"放在最前面
         const normalTabs = Object.keys(tagData);
-        const allTabs = ['⭐️', ...normalTabs, '已插入'];
+        const allTabs = ['⭐️', ...normalTabs, '翻譯緩存', '已插入'];
         // 记忆上次激活的标签页
         let activeTabIndex = 1; // 默认第二个标签（即tags.json的第一个类别）
         const lastCategory = this.getLastActiveTab();
@@ -4431,6 +4431,8 @@ class TagManager {
                         this._loadCategoryContent(content, userTagData, 'favorites');
                     } else if (contentId === '已插入') {
                         this._loadInsertedTagsContent(content);
+                    } else if (contentId === '翻譯緩存') {
+                        this._loadTranslateCacheContent(content, nodeId, inputId);
                     }
                     // 对于普通标签页，仅在首次加载
                     else if (content.getAttribute('data-loaded') !== 'true') {
@@ -4458,7 +4460,7 @@ class TagManager {
             this.eventCleanups.push(tabClickCleanup);
 
             // 添加右键菜单事件（特殊分类除外）
-            const specialCategories = ['⭐️', 'favorites', '已插入'];
+            const specialCategories = ['⭐️', 'favorites', '翻譯緩存', '已插入'];
             if (!specialCategories.includes(category)) {
                 const tabContextMenuCleanup = EventManager.addDOMListener(tab, 'contextmenu', (e) => {
                     e.preventDefault();
@@ -5182,6 +5184,219 @@ class TagManager {
         if (usedTags.size === 0) {
             container.appendChild(contentWrapper);
         }
+    }
+
+    /**
+     * 加载翻译缓存标签页内容
+     */
+    static _loadTranslateCacheContent(content, nodeId, inputId) {
+        // 清空现有内容
+        content.innerHTML = '';
+        content.setAttribute('data-loaded', 'true');
+
+        // 获取所有翻译缓存
+        const cache = TranslateCacheService.getAllTranslateCache();
+        
+        if (cache.size === 0) {
+            // 显示空状态
+            const emptyState = document.createElement('div');
+            emptyState.className = 'tag_empty_state';
+            emptyState.innerHTML = `
+                <div class="empty_icon">📝</div>
+                <div class="empty_text">暫無翻譯緩存</div>
+                <div class="empty_hint">翻譯過的內容會自動保存到這裡</div>
+            `;
+            content.appendChild(emptyState);
+            return;
+        }
+
+        // 创建搜索框
+        const searchContainer = document.createElement('div');
+        searchContainer.className = 'translate_cache_search_container';
+        const searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.className = 'translate_cache_search_input';
+        searchInput.placeholder = '搜索翻譯緩存...';
+        searchInput.addEventListener('input', (e) => {
+            this._filterTranslateCache(e.target.value, content, nodeId, inputId);
+        });
+        searchContainer.appendChild(searchInput);
+        content.appendChild(searchContainer);
+
+        // 创建统计信息
+        const stats = TranslateCacheService.getTranslateCacheStats();
+        const statsDiv = document.createElement('div');
+        statsDiv.className = 'translate_cache_stats';
+        statsDiv.textContent = `共 ${stats.total} 條緩存 (${stats.usage})`;
+        content.appendChild(statsDiv);
+
+        // 创建缓存列表容器
+        const listContainer = document.createElement('div');
+        listContainer.className = 'translate_cache_list';
+        content.appendChild(listContainer);
+
+        // 渲染缓存列表
+        this._renderTranslateCacheList(cache, listContainer, nodeId, inputId);
+    }
+
+    /**
+     * 渲染翻译缓存列表
+     */
+    static _renderTranslateCacheList(cache, container, nodeId, inputId) {
+        container.innerHTML = '';
+        
+        const entries = Array.from(cache.entries());
+        
+        entries.forEach(([source, translated], index) => {
+            const item = document.createElement('div');
+            item.className = 'translate_cache_item';
+            item.dataset.source = source;
+            item.dataset.translated = translated;
+            
+            // 创建原文显示区域
+            const sourceDiv = document.createElement('div');
+            sourceDiv.className = 'translate_cache_source';
+            sourceDiv.textContent = source;
+            sourceDiv.title = source;
+            
+            // 创建译文显示区域
+            const translatedDiv = document.createElement('div');
+            translatedDiv.className = 'translate_cache_translated';
+            translatedDiv.textContent = translated;
+            translatedDiv.title = translated;
+            
+            // 创建操作按钮区域
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'translate_cache_actions';
+            
+            // 插入原文按钮
+            const insertSourceBtn = document.createElement('button');
+            insertSourceBtn.className = 'translate_cache_insert_btn';
+            insertSourceBtn.textContent = '插入原文';
+            insertSourceBtn.onclick = (e) => {
+                e.stopPropagation();
+                this._insertTranslateCacheText(source, nodeId, inputId);
+            };
+            
+            // 插入译文按钮
+            const insertTranslatedBtn = document.createElement('button');
+            insertTranslatedBtn.className = 'translate_cache_insert_btn';
+            insertTranslatedBtn.textContent = '插入譯文';
+            insertTranslatedBtn.onclick = (e) => {
+                e.stopPropagation();
+                this._insertTranslateCacheText(translated, nodeId, inputId);
+            };
+            
+            // 删除按钮
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'translate_cache_delete_btn';
+            deleteBtn.innerHTML = '🗑️';
+            deleteBtn.title = '刪除';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                this._deleteTranslateCacheItem(source, container, nodeId, inputId);
+            };
+            
+            actionsDiv.appendChild(insertSourceBtn);
+            actionsDiv.appendChild(insertTranslatedBtn);
+            actionsDiv.appendChild(deleteBtn);
+            
+            item.appendChild(sourceDiv);
+            item.appendChild(translatedDiv);
+            item.appendChild(actionsDiv);
+            
+            container.appendChild(item);
+        });
+    }
+
+    /**
+     * 过滤翻译缓存
+     */
+    static _filterTranslateCache(keyword, content, nodeId, inputId) {
+        const listContainer = content.querySelector('.translate_cache_list');
+        if (!listContainer) return;
+        
+        if (!keyword || keyword.trim() === '') {
+            // 显示所有缓存
+            const cache = TranslateCacheService.getAllTranslateCache();
+            this._renderTranslateCacheList(cache, listContainer, nodeId, inputId);
+            
+            // 更新統計信息為全部
+            const stats = TranslateCacheService.getTranslateCacheStats();
+            const statsDiv = content.querySelector('.translate_cache_stats');
+            if (statsDiv) {
+                statsDiv.textContent = `共 ${stats.total} 條緩存 (${stats.usage})`;
+            }
+            return;
+        }
+        
+        // 搜索缓存
+        const results = TranslateCacheService.searchTranslateCache(keyword);
+        const filteredCache = new Map(results.map(r => [r.source, r.translated]));
+        this._renderTranslateCacheList(filteredCache, listContainer, nodeId, inputId);
+        
+        // 更新統計信息為搜索結果
+        const statsDiv = content.querySelector('.translate_cache_stats');
+        if (statsDiv) {
+            const totalStats = TranslateCacheService.getTranslateCacheStats();
+            statsDiv.textContent = `找到 ${results.length} 條結果 (共 ${totalStats.total} 條緩存)`;
+        }
+    }
+
+    /**
+     * 插入翻译缓存文字到输入框
+     */
+    static _insertTranslateCacheText(text, nodeId, inputId) {
+        const mapping = UIToolkit._findMapping(nodeId, inputId);
+        if (!mapping || !mapping.inputEl) return;
+        
+        const inputEl = mapping.inputEl;
+        const cursorPos = inputEl.selectionStart;
+        const beforeText = inputEl.value.substring(0, cursorPos);
+        const afterText = inputEl.value.substring(inputEl.selectionEnd);
+        
+        const newValue = beforeText + text + afterText;
+        inputEl.value = newValue;
+        
+        // 触发输入事件以更新节点
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        // 更新光标位置
+        const newPos = cursorPos + text.length;
+        inputEl.setSelectionRange(newPos, newPos);
+        inputEl.focus();
+        
+        logger.debug(`翻譯緩存 | 插入文字 | 長度:${text.length}`);
+    }
+
+    /**
+     * 删除翻译缓存项目
+     */
+    static _deleteTranslateCacheItem(source, container, nodeId, inputId) {
+        createConfirmPopup({
+            title: '確認刪除',
+            message: `確定要刪除這條翻譯緩存嗎？`,
+            onConfirm: () => {
+                TranslateCacheService.deleteTranslateCacheEntries([source]);
+                const cache = TranslateCacheService.getAllTranslateCache();
+                this._renderTranslateCacheList(cache, container, nodeId, inputId);
+                
+                // 更新统计信息
+                const stats = TranslateCacheService.getTranslateCacheStats();
+                const statsDiv = document.querySelector('.translate_cache_stats');
+                if (statsDiv) {
+                    statsDiv.textContent = `共 ${stats.total} 條緩存 (${stats.usage})`;
+                }
+
+                // 如果缓存为空，重新加载内容
+                if (cache.size === 0) {
+                    const content = container.closest('.popup_tab_content');
+                    if (content) {
+                        this._loadTranslateCacheContent(content, nodeId, inputId);
+                    }
+                }
+            }
+        });
     }
 }
 
