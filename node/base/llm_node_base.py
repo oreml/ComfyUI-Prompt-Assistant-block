@@ -79,10 +79,8 @@ class LLMNodeBase(BaseNode):
         
         options = []
         
-        # ---硬编码添加百度翻译---
-        # 百度翻译使用独立的baidu_translate配置,不在model_services列表中
-        baidu_config = config_manager.load_config().get('baidu_translate', {})
-        # 即使没有配置app_id,也要显示百度选项
+        # ---硬编码添加机器翻译（Google 为首选，百度其次）---
+        options.append("Google 翻译")
         options.append("百度翻译")
         
         # ---动态获取其他LLM服务---
@@ -108,14 +106,15 @@ class LLMNodeBase(BaseNode):
         解析"服务名/模型名"格式的字符串
         
         特殊处理:
-        - "百度翻译": 返回 ('baidu', None) - 百度翻译使用独立配置
+        - "Google 翻译": 返回 ('google', None)
+        - "百度翻译": 返回 ('baidu', None)
         
         参数:
-            service_model_str: 服务/模型字符串,例如 "智谱/glm-4-flash" 或 "百度翻译"
+            service_model_str: 服务/模型字符串,例如 "智谱/glm-4-flash" 或 "Google 翻译"
         
         返回:
             Tuple[str, Optional[str]]: (service_id, model_name)
-            - service_id: 服务ID (如 'zhipu', 'baidu')
+            - service_id: 服务ID (如 'zhipu', 'google', 'baidu')
             - model_name: 模型名称,如果没有则为None
         """
         from ...config_manager import config_manager
@@ -127,7 +126,9 @@ class LLMNodeBase(BaseNode):
             service_name = service_model_str
             model_name = None
         
-        # ---特殊处理:百度翻译---
+        # ---特殊处理: Google 翻译、百度翻译---
+        if service_name in ['Google 翻译', 'Google', 'google']:
+            return 'google', None
         if service_name in ['百度翻译', '百度', 'baidu']:
             return 'baidu', None
         

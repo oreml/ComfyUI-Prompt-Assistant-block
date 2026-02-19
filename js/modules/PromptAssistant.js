@@ -2184,18 +2184,26 @@ class PromptAssistant {
                                 try {
                                     // 获取翻译配置
                                     const configResp = await fetch(APIService.getApiUrl('/config/translate'));
+                                    let isGoogle = false;
                                     let isBaidu = false;
 
                                     if (configResp.ok) {
                                         const config = await configResp.json();
-                                        // 检查provider是否为'baidu'
-                                        if (config.provider === 'baidu') {
+                                        if (config.provider === 'google') {
+                                            isGoogle = true;
+                                        } else if (config.provider === 'baidu') {
                                             isBaidu = true;
                                         }
                                     }
 
-                                    if (isBaidu) {
-                                        // 百度翻译不支持流式，使用原有接口（自动降级）
+                                    if (isGoogle) {
+                                        result = await APIService.googleTranslate(
+                                            contentToTranslate,
+                                            langResult.from,
+                                            langResult.to,
+                                            request_id
+                                        );
+                                    } else if (isBaidu) {
                                         result = await APIService.baiduTranslate(
                                             contentToTranslate,
                                             langResult.from,
@@ -2330,7 +2338,32 @@ class PromptAssistant {
                     // 创建服务菜单项
                     const serviceMenuItems = [];
 
-                    // 百度翻译项（永远显示在第一位）
+                    // Google 翻译项（首位）
+                    const isGoogleCurrent = currentTranslateService === 'google';
+                    serviceMenuItems.push({
+                        label: 'Google 翻译',
+                        icon: `<span class="pi ${isGoogleCurrent ? 'pi-check-circle active-status' : 'pi-circle-off inactive-status'}"></span>`,
+                        onClick: async (context) => {
+                            try {
+                                const res = await fetch(APIService.getApiUrl('/services/current'), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ service_type: 'translate', service_id: 'google' })
+                                });
+                                if (!res.ok) throw new Error(`服务器返回错误: ${res.status}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: Google 翻译`);
+                                logger.log(`翻译服务切换 | 服务: Google 翻译`);
+                                window.dispatchEvent(new CustomEvent('pa-service-changed', {
+                                    detail: { service_type: 'translate', service_id: 'google' }
+                                }));
+                            } catch (err) {
+                                logger.error(`切换翻译服务失败: ${err.message}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'error', `切换失败: ${err.message}`);
+                            }
+                        }
+                    });
+
+                    // 百度翻译项
                     const isBaiduCurrent = currentTranslateService === 'baidu';
                     serviceMenuItems.push({
                         label: '百度翻译',
@@ -2345,8 +2378,6 @@ class PromptAssistant {
                                 if (!res.ok) throw new Error(`服务器返回错误: ${res.status}`);
                                 UIToolkit.showStatusTip(context.buttonElement, 'success', `已切换到: 百度翻译`);
                                 logger.log(`翻译服务切换 | 服务: 百度翻译`);
-
-                                // 派发全局事件通知其他组件同步
                                 window.dispatchEvent(new CustomEvent('pa-service-changed', {
                                     detail: { service_type: 'translate', service_id: 'baidu' }
                                 }));

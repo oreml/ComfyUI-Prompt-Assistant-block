@@ -531,6 +531,7 @@ class NodeHelpTranslator {
 
             const textsToTranslate = textBlocks.map(block => block.text);
             let translations = [];
+            let isGoogle = false;
             let isBaidu = false;
 
             // 1. 获取全局翻译配置
@@ -539,7 +540,9 @@ class NodeHelpTranslator {
                 const configResp = await fetch(APIService.getApiUrl('/config/translate'));
                 if (configResp.ok) {
                     const config = await configResp.json();
-                    if (config.provider === 'baidu') {
+                    if (config.provider === 'google') {
+                        isGoogle = true;
+                    } else if (config.provider === 'baidu') {
                         isBaidu = true;
                     }
                 }
@@ -548,9 +551,21 @@ class NodeHelpTranslator {
             }
 
             // 2. 根据服务类型执行翻译
-            if (isBaidu) {
+            if (isGoogle) {
+                logger.log(`[NodeHelpTranslator] 使用 Google 翻译 API 进行翻译 (${from}->${to})`);
+                const results = await APIService.batchMachineTranslate(textsToTranslate, from, to, 'google');
+                translations = results.map(r => {
+                    if (r && r.success && r.data && r.data.translated) {
+                        return r.data.translated;
+                    }
+                    return null;
+                });
+                const successCount = translations.filter(t => t !== null).length;
+                if (successCount === 0 && textsToTranslate.length > 0) {
+                    throw new Error('所有文本翻译失败 (Google)');
+                }
+            } else if (isBaidu) {
                 logger.log(`[NodeHelpTranslator] 使用百度翻译API进行翻译 (${from}->${to})`);
-                // 百度批量翻译是串行请求，返回结果数组
                 const results = await APIService.batchBaiduTranslate(textsToTranslate, from, to);
 
                 // 提取翻译结果，BaiduTranslateService 返回格式需与 LLM 保持一致 (data.translated)
@@ -1232,7 +1247,31 @@ class NodeHelpTranslator {
 
         const menuItems = [];
 
-        // 1. 添加百度翻译选项（始终显示）
+        // 1. 添加 Google 翻译选项（首位）
+        const isGoogle = currentServiceId === 'google';
+        menuItems.push({
+            label: 'Google 翻译',
+            icon: isGoogle ? 'pi pi-check' : '',
+            command: async () => {
+                const success = await this._setTranslateConfig('google', '');
+                if (success) {
+                    this._currentTranslateConfig = { provider: 'google', model: '' };
+                    UIToolkit.showStatusTip(
+                        document.querySelector(`.pa-translate-btn[data-node-name="${nodeName}"]`),
+                        'success',
+                        '已选择: Google 翻译'
+                    );
+                    if (this.currentHelpPanel.splitBtn) {
+                        this.currentHelpPanel.splitBtn.updateMenu(this._getMenuItems(nodeName, currentMode));
+                    }
+                    window.dispatchEvent(new CustomEvent('pa-service-changed', {
+                        detail: { service_type: 'translate', service_id: 'google' }
+                    }));
+                }
+            }
+        });
+
+        // 2. 添加百度翻译选项
         const isBaidu = currentServiceId === 'baidu';
         menuItems.push({
             label: '百度翻译',
@@ -1240,9 +1279,7 @@ class NodeHelpTranslator {
             command: async () => {
                 const success = await this._setTranslateConfig('baidu', '');
                 if (success) {
-                    // 立即更新本地缓存，实现实时同步
                     this._currentTranslateConfig = { provider: 'baidu', model: '' };
-
                     UIToolkit.showStatusTip(
                         document.querySelector(`.pa-translate-btn[data-node-name="${nodeName}"]`),
                         'success',
@@ -1251,8 +1288,6 @@ class NodeHelpTranslator {
                     if (this.currentHelpPanel.splitBtn) {
                         this.currentHelpPanel.splitBtn.updateMenu(this._getMenuItems(nodeName, currentMode));
                     }
-
-                    // 广播全局服务变更事件，通知其他组件同步
                     window.dispatchEvent(new CustomEvent('pa-service-changed', {
                         detail: { service_type: 'translate', service_id: 'baidu' }
                     }));

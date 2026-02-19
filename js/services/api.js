@@ -329,6 +329,42 @@ class APIService {
     }
 
     /**
+     * Google 翻译 API
+     */
+    static async googleTranslate(text, from = 'auto', to = 'zh', request_id = null, is_auto = false) {
+        if (!request_id) {
+            request_id = this.generateRequestId('trans', 'google');
+        }
+        const controller = new AbortController();
+        const signal = controller.signal;
+        runningRequests.set(request_id, controller);
+        try {
+            if (!text || text.trim() === '') {
+                throw new Error('待翻译文本不能为空');
+            }
+            const apiUrl = this.getApiUrl('google/translate');
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, from, to, request_id, is_auto }),
+                signal
+            });
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                logger.debug(`Google 翻译请求被用户中止 | ID: ${request_id}`);
+                return { success: false, error: '请求已取消', cancelled: true };
+            }
+            return { success: false, error: error.message };
+        } finally {
+            if (runningRequests.has(request_id)) {
+                runningRequests.delete(request_id);
+            }
+        }
+    }
+
+    /**
      * 百度翻译API
      */
     static async baiduTranslate(text, from = 'auto', to = 'zh', request_id = null, is_auto = false) {
@@ -386,26 +422,29 @@ class APIService {
     }
 
     /**
-     * 批量翻译
+     * 批量翻译（根据当前翻译服务类型选择 Google 或百度）
      */
-    static async batchBaiduTranslate(texts, from = 'auto', to = 'zh') {
+    static async batchMachineTranslate(texts, from = 'auto', to = 'zh', provider = 'google') {
         try {
             if (!Array.isArray(texts) || texts.length === 0) {
                 throw new Error('待翻译文本数组不能为空');
             }
-
-            // 串行处理每个文本的翻译
             const results = [];
+            const translateOne = provider === 'google' ? this.googleTranslate.bind(this) : this.baiduTranslate.bind(this);
             for (const text of texts) {
-                const result = await this.baiduTranslate(text, from, to);
+                const result = await translateOne(text, from, to);
                 results.push(result);
             }
-
             return results;
         } catch (error) {
             logger.error(`批量翻译 | 结果:失败 | 错误:${error.message}`);
             return [];
         }
+    }
+
+    /** @deprecated 请使用 batchMachineTranslate(texts, from, to, 'baidu') */
+    static async batchBaiduTranslate(texts, from = 'auto', to = 'zh') {
+        return this.batchMachineTranslate(texts, from, to, 'baidu');
     }
 
     /**

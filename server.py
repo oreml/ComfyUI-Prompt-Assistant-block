@@ -2,6 +2,7 @@ from aiohttp import web
 from server import PromptServer
 from .config_manager import config_manager
 from .services.baidu import BaiduTranslateService
+from .services.google import GoogleTranslateService
 from .services.llm import LLMService
 from .services.vlm import VisionService
 from .services.model_list import get_models_from_service
@@ -87,6 +88,12 @@ async def set_streaming_progress_setting(request):
     except Exception as e:
         print(f"{ERROR_PREFIX} 更新流式进度设置失败: {str(e)}")
         return web.json_response({"success": False, "error": str(e)}, status=500)
+
+@PromptServer.instance.routes.get(f'{API_PREFIX}/config/google_translate')
+async def get_google_translate_config(request):
+    """获取 Google 翻译配置"""
+    config = config_manager.get_google_translate_config()
+    return web.json_response(config)
 
 @PromptServer.instance.routes.get(f'{API_PREFIX}/config/baidu_translate')
 async def get_baidu_translate_config(request):
@@ -857,6 +864,20 @@ async def remove_favorite(request):
         print(f"{ERROR_PREFIX} 移除收藏失败 | 错误:{str(e)}")
         return web.json_response({"success": False, "error": str(e)}, status=500)
 
+@PromptServer.instance.routes.post(f'{API_PREFIX}/config/google_translate')
+async def update_google_translate_config(request):
+    """更新 Google 翻译配置"""
+    try:
+        data = await request.json()
+        api_key = data.get('api_key')
+        success = config_manager.update_google_translate_config(api_key=api_key)
+        if success:
+            return web.json_response({'message': '配置已更新'})
+        return web.json_response({'error': '配置更新失败'}, status=500)
+    except Exception as e:
+        print(f"{ERROR_PREFIX} Google 翻译配置更新异常 | 错误:{str(e)}")
+        return web.json_response({'error': str(e)}, status=500)
+
 @PromptServer.instance.routes.post(f'{API_PREFIX}/config/baidu_translate')
 async def update_baidu_translate_config(request):
     """更新百度翻译配置"""
@@ -1122,6 +1143,40 @@ async def cancel_request(request):
         return web.json_response({"success": False, "error": error_msg}, status=500)
 
 # 新增API路由
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/google/translate')
+async def google_translate(request):
+    """
+    Google 翻译 API
+    后端只负责原始文本的翻译，格式处理由前端负责。
+    """
+    request_id = None
+    try:
+        data = await request.json()
+        text = data.get("text")
+        from_lang = data.get("from", "auto")
+        to_lang = data.get("to", "zh")
+        request_id = data.get("request_id")
+        is_auto = data.get("is_auto", False)
+        if not request_id:
+            return web.json_response({"success": False, "error": "缺少request_id"}, status=400)
+        from_lang_name = {"auto": "自动", "zh": "中文", "en": "英文"}.get(from_lang, from_lang)
+        to_lang_name = {"zh": "中文", "en": "英文"}.get(to_lang, to_lang)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_FRONTEND, "Google 翻译", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
+        task = asyncio.create_task(GoogleTranslateService.translate(text, from_lang, to_lang, request_id, is_auto, task_type=TASK_TRANSLATE, source=SOURCE_FRONTEND))
+        ACTIVE_TASKS[request_id] = task
+        result = await task
+        return web.json_response(result)
+    except asyncio.CancelledError:
+        print(f"\r{_ANSI_CLEAR_EOL}{WARN_PREFIX} Google 翻译任务被取消 | ID:{request_id}", flush=True)
+        return web.json_response({"success": False, "error": "请求已取消", "cancelled": True}, status=400)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"{ERROR_PREFIX} Google 翻译请求异常 | 错误:{error_msg}")
+        return web.json_response({"success": False, "error": error_msg})
+    finally:
+        if request_id and request_id in ACTIVE_TASKS:
+            del ACTIVE_TASKS[request_id]
 
 @PromptServer.instance.routes.post(f'{API_PREFIX}/baidu/translate')
 async def baidu_translate(request):

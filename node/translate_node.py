@@ -10,6 +10,7 @@ from comfy.model_management import InterruptProcessingException
 
 from ..services.llm import LLMService
 from ..services.baidu import BaiduTranslateService
+from ..services.google import GoogleTranslateService
 from ..utils.common import format_api_error, format_model_with_thinking, generate_request_id, log_prepare, log_error, TASK_TRANSLATE, SOURCE_NODE
 from ..services.thinking_control import build_thinking_suppression
 from .base import LLMNodeBase
@@ -23,9 +24,9 @@ class PromptTranslate(LLMNodeBase):
 
     @classmethod
     def INPUT_TYPES(cls):
-        # ---动态获取翻译服务/模型列表(包含硬编码的百度翻译)---
+        # ---动态获取翻译服务/模型列表(Google 翻译为首选)---
         service_options = cls.get_translate_service_options()
-        default_service = service_options[0] if service_options else "百度翻译"
+        default_service = service_options[0] if service_options else "Google 翻译"
         
         return {
             "required": {
@@ -133,8 +134,11 @@ class PromptTranslate(LLMNodeBase):
             if not service_id:
                 raise ValueError(f"Invalid service selection: {translate_service}")
             
-            # ---百度翻译特殊处理---
-            if service_id == 'baidu':
+            # ---Google 翻译---
+            if service_id == 'google':
+                request_id, result = self._translate_with_google(source_text, detected_lang, to_lang, translate_service, from_lang_name, to_lang_name, unique_id)
+            # ---百度翻译---
+            elif service_id == 'baidu':
                 request_id, result = self._translate_with_baidu(source_text, detected_lang, to_lang, translate_service, from_lang_name, to_lang_name, unique_id)
             else:
                 # ---LLM翻译:获取服务配置---
@@ -168,6 +172,22 @@ class PromptTranslate(LLMNodeBase):
             error_msg = format_api_error(e, translate_service)
             log_error(TASK_TRANSLATE, request_id, error_msg)
             raise RuntimeError(f"Translation error: {error_msg}")
+
+    def _translate_with_google(self, text, from_lang, to_lang, service_name, from_lang_name, to_lang_name, unique_id):
+        """使用 Google 翻译服务"""
+        request_id = generate_request_id("trans", "google", unique_id)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_NODE, "Google 翻译", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
+        result = self._run_llm_task(
+            GoogleTranslateService.translate,
+            service_name,
+            text=text,
+            from_lang=from_lang,
+            to_lang=to_lang,
+            request_id=request_id,
+            task_type=TASK_TRANSLATE,
+            source=SOURCE_NODE
+        )
+        return request_id, result
 
     def _translate_with_baidu(self, text, from_lang, to_lang, service_name, from_lang_name, to_lang_name, unique_id):
         """使用百度翻译服务"""

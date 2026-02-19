@@ -631,10 +631,15 @@ class ConfigManager:
         active_prompts[prompt_type] = prompt_id
         return self.save_active_prompts(active_prompts)
 
+    def get_google_translate_config(self):
+        """获取 Google 翻译配置"""
+        config = self.load_config()
+        return config.get("google_translate", self.default_config.get("google_translate", {"api_key": ""}))
+
     def get_baidu_translate_config(self):
         """获取百度翻译配置"""
         config = self.load_config()
-        return config.get("baidu_translate", self.default_config["baidu_translate"])
+        return config.get("baidu_translate", self.default_config.get("baidu_translate", {"app_id": "", "secret_key": ""}))
 
     def get_llm_config(self):
         """获取LLM配置"""
@@ -807,9 +812,23 @@ class ConfigManager:
             current_service_id = current_service_info.get('service')
             current_model_name = current_service_info.get('model')
         else:
-            # 未设置，默认使用百度翻译
-            current_service_id = 'baidu'
+            # 未设置，默认使用 Google 翻译
+            current_service_id = 'google'
             current_model_name = None
+        
+        # Google 翻译特殊处理（使用独立的 google_translate 配置）
+        if current_service_id == 'google':
+            google_config = self.get_google_translate_config()
+            return {
+                "provider": "google",
+                "model": "",
+                "base_url": "",
+                "api_key": google_config.get("api_key", ""),
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "top_p": 0.9,
+                "providers": {}
+            }
         
         # 百度翻译特殊处理（使用独立的baidu_translate配置）
         if current_service_id == 'baidu':
@@ -829,14 +848,13 @@ class ConfigManager:
         # 查找对应的LLM服务
         service = self._get_service_by_id(current_service_id)
         if not service:
-            # 服务不存在，回退到百度翻译
-            baidu_config = self.get_baidu_translate_config()
+            # 服务不存在，回退到 Google 翻译
+            google_config = self.get_google_translate_config()
             return {
-                "provider": "baidu",
+                "provider": "google",
                 "model": "",
                 "base_url": "",
-                "api_key": baidu_config.get('app_id', ''),
-                "secret_key": baidu_config.get('secret_key', ''),
+                "api_key": google_config.get("api_key", ""),
                 "temperature": 0.7,
                 "max_tokens": 1000,
                 "top_p": 0.9,
@@ -857,14 +875,13 @@ class ConfigManager:
                                 llm_models[0] if llm_models else None)
         
         if not target_model:
-            # 没有可用模型，回退到百度翻译
-            baidu_config = self.get_baidu_translate_config()
+            # 没有可用模型，回退到 Google 翻译
+            google_config = self.get_google_translate_config()
             return {
-                "provider": "baidu",
+                "provider": "google",
                 "model": "",
                 "base_url": "",
-                "api_key": baidu_config.get('app_id', ''),
-                "secret_key": baidu_config.get('secret_key', ''),
+                "api_key": google_config.get("api_key", ""),
                 "temperature": 0.7,
                 "max_tokens": 1000,
                 "top_p": 0.9,
@@ -925,6 +942,15 @@ class ConfigManager:
             # 如果无法获取，返回空字典
             self._log(f"获取用户设置失败: {str(e)}")
             return {}
+
+    def update_google_translate_config(self, api_key=None):
+        """更新 Google 翻译配置"""
+        config = self.load_config()
+        if "google_translate" not in config:
+            config["google_translate"] = {}
+        if api_key is not None:
+            config["google_translate"]["api_key"] = api_key
+        return self.save_config(config)
 
     def update_baidu_translate_config(self, app_id=None, secret_key=None):
         """更新百度翻译配置"""
@@ -1490,6 +1516,21 @@ class ConfigManager:
                 self._log("设置当前服务商失败: 配置版本过低")
                 return False
             
+            # ---Google 翻译特殊处理---
+            if service_id == 'google':
+                if service_type not in ['llm', 'translate']:
+                    self._log(f"设置当前服务商失败: Google 翻译不支持{service_type}服务类型")
+                    return False
+                if 'google_translate' not in config:
+                    config['google_translate'] = {"api_key": ""}
+                if 'current_services' not in config:
+                    config['current_services'] = {}
+                config['current_services'][service_type] = {"service": "google", "model": ""}
+                if self.save_config(config):
+                    self._log(f"当前服务商已切换: Google 翻译 ({service_type})")
+                    return True
+                return False
+
             # ---百度翻译特殊处理---
             # 百度翻译使用独立的baidu_translate配置,不在model_services中
             if service_id == 'baidu':

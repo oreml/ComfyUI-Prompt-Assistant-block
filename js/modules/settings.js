@@ -36,6 +36,7 @@ const SERVICE_TYPES = {
         configEndpoint: '/config/translate',
         serviceType: 'translate',
         filterKey: 'llm_models',
+        includeGoogle: true,
         includeBaidu: true
     },
     llm: {
@@ -148,7 +149,10 @@ const serviceSelector = {
         const services = await this.getServices();
         const options = [];
 
-        // 添加百度翻译选项（仅翻译类型）
+        // 添加机器翻译选项（Google 为首位，仅翻译类型）
+        if (config.includeGoogle) {
+            options.push({ value: 'google', text: 'Google 翻译' });
+        }
         if (config.includeBaidu) {
             options.push({ value: 'baidu', text: '百度翻译' });
         }

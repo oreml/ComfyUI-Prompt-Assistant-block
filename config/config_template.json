@@ -1,6 +1,9 @@
 {
     "__config_version": "2.0",
     "__comment": "提示词小助手配置文件模板",
+    "google_translate": {
+        "api_key": ""
+    },
     "baidu_translate": {
         "app_id": "",
         "secret_key": ""
@@ -109,7 +112,7 @@
             "model": "glm-4v-flash"
         },
         "translate": {
-            "service": "baidu",
+            "service": "google",
             "model": ""
         }
     }

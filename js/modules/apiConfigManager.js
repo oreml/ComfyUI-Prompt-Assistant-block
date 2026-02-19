@@ -30,6 +30,8 @@ class APIConfigManager {
         this.services = [];
         this.currentServices = { llm: null, vlm: null };
 
+        // Google 翻译配置（默认首选）
+        this.googleConfig = { api_key: '' };
         // 百度翻译配置
         this.baiduConfig = { app_id: '', secret_key: '' };
     }
@@ -92,6 +94,10 @@ class APIConfigManager {
             if (servicesData.success) {
                 this.services = servicesData.services || [];
             }
+
+            // 加载 Google 翻译配置
+            const googleRes = await fetch(APIService.getApiUrl('/config/google_translate'));
+            this.googleConfig = await googleRes.json();
 
             // 加载百度翻译配置
             const baiduRes = await fetch(APIService.getApiUrl('/config/baidu_translate'));
@@ -199,6 +205,10 @@ class APIConfigManager {
         const tabContent = document.createElement('div');
         tabContent.className = 'tab-content';
 
+        // 创建 Google 翻译标签页（首位）
+        const googleContent = this._createGoogleTab();
+        tabContent.appendChild(googleContent);
+
         // 创建百度翻译标签页
         const baiduContent = this._createBaiduTab();
         tabContent.appendChild(baiduContent);
@@ -212,8 +222,8 @@ class APIConfigManager {
         tabContainer.appendChild(tabContent);
         container.appendChild(tabContainer);
 
-        // 默认显示第一个标签页
-        this._switchTab('baidu', tabHeader, tabContent);
+        // 默认显示第一个标签页（Google 翻译）
+        this._switchTab('google', tabHeader, tabContent);
     }
 
     /**
@@ -222,6 +232,10 @@ class APIConfigManager {
     _createTabHeader() {
         const header = document.createElement('div');
         header.className = 'tab-header';
+
+        // Google 翻译标签（首位）
+        const googleTab = this._createTabButton('google', 'Google 翻译', '机器翻译');
+        header.appendChild(googleTab);
 
         // 百度翻译标签
         const baiduTab = this._createTabButton('baidu', '百度翻译', '机器翻译');
@@ -270,8 +284,8 @@ class APIConfigManager {
 
             buttons.forEach(btn => {
                 const tabId = btn.dataset.tab;
-                // 排除特殊标签(如百度翻译)
-                if (tabId && tabId !== 'baidu') {
+                // 排除特殊标签(Google 翻译、百度翻译)
+                if (tabId && tabId !== 'google' && tabId !== 'baidu') {
                     serviceIds.push(tabId);
                 }
             });
@@ -350,10 +364,10 @@ class APIConfigManager {
             this._switchTab(tabId, button.parentElement, button.parentElement.nextElementSibling);
         });
 
-        // 为服务商标签添加右键菜单（百度翻译和预置服务商除外）
+        // 为服务商标签添加右键菜单（Google/百度翻译和预置服务商除外）
         // 预置服务商不可编辑/删除，只有用户自定义的服务商才能使用右键菜单
         const isPresetService = APIConfigManager.PRESET_SERVICE_IDS.includes(tabId);
-        if (tabId !== 'baidu' && !isPresetService) {
+        if (tabId !== 'google' && tabId !== 'baidu' && !isPresetService) {
             this._attachServiceContextMenu(button, tabId, title);
         }
 
@@ -622,6 +636,70 @@ class APIConfigManager {
                 }
             }
         });
+    }
+
+    /**
+     * 创建 Google 翻译标签页
+     */
+    _createGoogleTab() {
+        const pane = document.createElement('div');
+        pane.className = 'tab-pane';
+        pane.dataset.tab = 'google';
+
+        const section = createFormGroup('Google 翻译配置', [
+            { text: '开通 Google Cloud Translation API', url: 'https://cloud.google.com/translate/docs/setup' }
+        ]);
+        section.classList.add('google-translate-section');
+
+        const linkElement = section.querySelector('.settings-service-link');
+        if (linkElement) {
+            const icon = document.createElement('i');
+            icon.className = 'pi pi-star';
+            icon.style.marginRight = '4px';
+            linkElement.insertBefore(icon, linkElement.firstChild);
+        }
+
+        const apiKeyInput = createInputGroup('API Key', '请输入 Google Cloud Translation API Key');
+        apiKeyInput.input.type = 'password';
+        apiKeyInput.input.value = this.googleConfig.api_key || '';
+        apiKeyInput.input.addEventListener('input', (e) => {
+            this.googleConfig.api_key = e.target.value;
+        });
+        apiKeyInput.input.addEventListener('blur', async () => {
+            await this._saveGoogleConfig();
+        });
+
+        section.appendChild(apiKeyInput.group);
+        pane.appendChild(section);
+        return pane;
+    }
+
+    /**
+     * 保存 Google 翻译配置
+     */
+    async _saveGoogleConfig() {
+        try {
+            await fetch(APIService.getApiUrl('/config/google_translate'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.googleConfig)
+            });
+            logger.debug('Google 翻译配置已保存');
+            this.notifyConfigChange();
+            app.extensionManager.toast.add({
+                severity: 'success',
+                summary: 'Google 翻译配置已保存',
+                life: 2000
+            });
+        } catch (error) {
+            logger.error('保存 Google 翻译配置失败', error);
+            app.extensionManager.toast.add({
+                severity: 'error',
+                summary: '保存失败',
+                detail: error.message,
+                life: 3000
+            });
+        }
     }
 
     /**
