@@ -1702,35 +1702,13 @@ class PromptAssistant {
                 onClick: (e, widget) => {
                     // 創建一個帶有文字選擇功能的顯示函數
                     const showTextGridPopup = (options) => {
-                        // 處理文字選擇功能
+                        // 處理文字選擇功能（現在只顯示，不插入）
                         const enhancedOptions = {
                             ...options,
-                            onTextSelect: (text, value, item) => {
-                                // 獲取當前輸入框的值和光標位置
-                                const currentValue = widget.inputEl.value;
-                                const cursorPos = widget.inputEl.selectionStart;
-                                const beforeText = currentValue.substring(0, cursorPos);
-                                const afterText = currentValue.substring(widget.inputEl.selectionEnd);
-
-                                // 添加文字（使用 value 或 text）
-                                const textToInsert = value || text;
-                                const newValue = beforeText + textToInsert + afterText;
-
-                                // 更新輸入框內容並添加高亮效果
-                                this.updateInputWithHighlight(widget, newValue);
-
-                                // 更新光標位置
-                                const newPos = cursorPos + textToInsert.length;
-                                widget.inputEl.setSelectionRange(newPos, newPos);
-
-                                // 保持焦點在輸入框
-                                widget.inputEl.focus();
-
-                                // 關閉彈窗
-                                TextGridManager.hideTextGridPopup();
-                            },
+                            // 移除 onTextSelect，因為現在不允許點擊插入
                             // 可以從輸入框獲取文字項目，或使用默認項目
-                            textItems: this._getTextGridItems(widget)
+                            textItems: this._getTextGridItems(widget),
+                            widget: widget // 傳遞 widget 引用，用於更新輸入框
                         };
 
                         // 調用文字 Grid 管理器顯示彈窗

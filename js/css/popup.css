@@ -1074,7 +1074,7 @@
     padding: 12px;
     background-color: color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%);
     border-radius: 8px;
-    cursor: pointer;
+    cursor: grab; /* 改為 grab，表示可拖動 */
     transition: all 0.2s ease;
     text-align: center;
     user-select: none;
@@ -1085,11 +1085,56 @@
     justify-content: center;
 }
 
+.text_grid_item:active {
+    cursor: grabbing; /* 拖動時改為 grabbing */
+}
+
 .text_grid_item:hover {
     background-color: color-mix(in srgb, var(--p-primary-500), transparent 84%);
     border-color: rgba(255, 255, 255, 0.2);
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Sortable 拖動狀態樣式 */
+.text_grid_item.sortable-ghost {
+    opacity: 0.4;
+    background-color: color-mix(in srgb, var(--p-primary-500), transparent 60%);
+}
+
+.text_grid_item.sortable-chosen {
+    cursor: grabbing !important;
+    background-color: color-mix(in srgb, var(--p-primary-500), transparent 70%);
+    border-color: var(--p-primary-500);
+    transform: scale(1.05);
+    z-index: 1000;
+}
+
+.text_grid_item.sortable-drag {
+    opacity: 0.8;
+}
+
+/* 禁用狀態樣式 */
+.text_grid_item_disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+}
+
+.text_grid_item_disabled .text_grid_item_text {
+    text-decoration: line-through;
+    color: var(--p-text-muted-color) !important;
+}
+
+.text_grid_item_disabled:hover {
+    background-color: color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 30%) !important;
+    transform: none !important;
+}
+
+/* 禁用的項目不可拖動 */
+.text_grid_item_disabled.sortable-ghost,
+.text_grid_item_disabled.sortable-chosen,
+.text_grid_item_disabled.sortable-drag {
+    display: none;
 }
 
 .text_grid_item_text {
