@@ -5465,6 +5465,341 @@ class TagManager {
     }
 
     /**
+     * 顯示翻譯單字緩存的右鍵菜單
+     */
+    static _showTranslateWordCacheContextMenu(e, word, translated, nodeId, inputId, container) {
+        // 檢查是否已收藏
+        const isFavorited = this._isWordCacheFavorited(word);
+        
+        const menuItems = isFavorited ? [
+            {
+                label: '取消收藏',
+                icon: 'pi-minus-circle',
+                onClick: async () => {
+                    await this._handleUnbookmarkWordCache(word);
+                    // 重新渲染以更新狀態
+                    const wordCache = this._getWordCacheFromTranslateCache();
+                    this._renderTranslateWordCacheList(wordCache, container, nodeId, inputId);
+                }
+            },
+            {
+                separator: true
+            },
+            {
+                label: '編輯',
+                icon: 'pi-pencil',
+                onClick: () => {
+                    this._handleEditWordCache(word, translated, nodeId, inputId, container);
+                }
+            },
+            {
+                separator: true
+            },
+            {
+                label: '刪除',
+                icon: 'pi-trash',
+                danger: true,
+                onClick: () => {
+                    this._handleDeleteWordCache(word, nodeId, inputId, container);
+                }
+            }
+        ] : [
+            {
+                label: '收藏',
+                icon: 'pi-star',
+                onClick: async () => {
+                    await this._handleBookmarkWordCache(word, translated);
+                    // 重新渲染以更新狀態
+                    const wordCache = this._getWordCacheFromTranslateCache();
+                    this._renderTranslateWordCacheList(wordCache, container, nodeId, inputId);
+                }
+            },
+            {
+                separator: true
+            },
+            {
+                label: '編輯',
+                icon: 'pi-pencil',
+                onClick: () => {
+                    this._handleEditWordCache(word, translated, nodeId, inputId, container);
+                }
+            },
+            {
+                separator: true
+            },
+            {
+                label: '刪除',
+                icon: 'pi-trash',
+                danger: true,
+                onClick: () => {
+                    this._handleDeleteWordCache(word, nodeId, inputId, container);
+                }
+            }
+        ];
+
+        showContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            items: menuItems
+        });
+    }
+
+    /**
+     * 檢查單字緩存是否已收藏
+     */
+    static _isWordCacheFavorited(word) {
+        if (!this.favorites) return false;
+        
+        // 檢查所有分類中是否有這個單字
+        for (const category in this.favorites) {
+            const catData = this.favorites[category];
+            if (catData && Object.values(catData).includes(word)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 收藏單字緩存
+     */
+    static async _handleBookmarkWordCache(word, translated) {
+        let targetCategory = this.currentCsvFile || "翻譯單字緩存";
+        targetCategory = targetCategory.replace(/\.(csv|json|yaml|yml)$/i, '');
+        
+        const success = await ResourceManager.addFavorite(word, word, targetCategory);
+        if (success) {
+            if (!this.favorites) this.favorites = {};
+            if (!this.favorites[targetCategory]) {
+                this.favorites[targetCategory] = {};
+            }
+            this.favorites[targetCategory][word] = word;
+            logger.debug(`翻譯單字緩存 | 收藏成功 | 單字:${word}`);
+        }
+        return success;
+    }
+
+    /**
+     * 取消收藏單字緩存
+     */
+    static async _handleUnbookmarkWordCache(word) {
+        let targetCategory = this.currentCsvFile || "翻譯單字緩存";
+        targetCategory = targetCategory.replace(/\.(csv|json|yaml|yml)$/i, '');
+        
+        const success = await ResourceManager.removeFavorite(word, targetCategory);
+        if (success) {
+            if (this.favorites && this.favorites[targetCategory]) {
+                const catData = this.favorites[targetCategory];
+                for (const key in catData) {
+                    if (catData[key] === word) {
+                        delete catData[key];
+                        break;
+                    }
+                }
+            }
+            logger.debug(`翻譯單字緩存 | 取消收藏成功 | 單字:${word}`);
+        }
+        return success;
+    }
+
+    /**
+     * 編輯單字緩存
+     */
+    static _handleEditWordCache(word, translated, nodeId, inputId, container) {
+        // 查找觸發元素
+        const item = document.querySelector(`.translate_word_cache_item[data-source="${CSS.escape(word)}"]`);
+        const anchor = item || document.body;
+        
+        // 創建表單渲染函數
+        const renderForm = (formContainer) => {
+            formContainer.style.display = 'flex';
+            formContainer.style.flexDirection = 'column';
+            formContainer.style.gap = '16px';
+            formContainer.style.minWidth = '300px';
+            
+            // 原文輸入組 - 使用浮動標籤樣式
+            const sourceGroup = document.createElement('div');
+            sourceGroup.className = 'settings-form-group';
+            
+            const sourceFloatContainer = document.createElement('div');
+            sourceFloatContainer.className = 'float-label-container';
+            
+            const sourceInput = document.createElement('input');
+            sourceInput.type = 'text';
+            sourceInput.value = word;
+            sourceInput.className = 'p-inputtext p-component';
+            sourceInput.placeholder = ' ';
+            
+            const sourceLabel = document.createElement('label');
+            sourceLabel.textContent = '原文';
+            
+            sourceFloatContainer.appendChild(sourceInput);
+            sourceFloatContainer.appendChild(sourceLabel);
+            sourceGroup.appendChild(sourceFloatContainer);
+            formContainer.appendChild(sourceGroup);
+            
+            // 翻譯輸入組 - 使用浮動標籤樣式
+            const translatedGroup = document.createElement('div');
+            translatedGroup.className = 'settings-form-group';
+            
+            const translatedFloatContainer = document.createElement('div');
+            translatedFloatContainer.className = 'float-label-container';
+            
+            const translatedInput = document.createElement('input');
+            translatedInput.type = 'text';
+            translatedInput.value = translated;
+            translatedInput.className = 'p-inputtext p-component';
+            translatedInput.placeholder = ' ';
+            
+            const translatedLabel = document.createElement('label');
+            translatedLabel.textContent = '翻譯';
+            
+            translatedFloatContainer.appendChild(translatedInput);
+            translatedFloatContainer.appendChild(translatedLabel);
+            translatedGroup.appendChild(translatedFloatContainer);
+            formContainer.appendChild(translatedGroup);
+            
+            // 返回引用以便獲取值
+            return { sourceInput, translatedInput };
+        };
+        
+        let inputs = {};
+        
+        createConfirmPopup({
+            target: anchor,
+            message: '編輯翻譯單字',
+            icon: 'pi-pencil',
+            confirmLabel: '保存',
+            cancelLabel: '取消',
+            renderFormContent: (formContainer) => {
+                inputs = renderForm(formContainer);
+            },
+            onConfirm: () => {
+                const newWord = inputs.sourceInput.value.trim();
+                const newTranslated = inputs.translatedInput.value.trim();
+                
+                if (!newWord || !newTranslated) {
+                    app.extensionManager.toast.add({
+                        severity: "warn",
+                        summary: "輸入無效",
+                        detail: "原文和翻譯不能為空",
+                        life: 3000
+                    });
+                    throw new Error("Validation failed");
+                }
+                
+                // 更新翻譯緩存
+                // 需要找到包含這個單字的所有緩存條目並更新
+                const cache = TranslateCacheService.getAllTranslateCache();
+                const updatedEntries = new Map();
+                
+                cache.forEach((oldTranslated, source) => {
+                    const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                    const translatedWords = oldTranslated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                    
+                    if (sourceWords.length === translatedWords.length) {
+                        // 檢查是否包含要編輯的單字
+                        const wordIndex = sourceWords.indexOf(word);
+                        if (wordIndex !== -1) {
+                            // 更新單字和翻譯
+                            sourceWords[wordIndex] = newWord;
+                            translatedWords[wordIndex] = newTranslated;
+                            
+                            // 重新組合
+                            const newSource = sourceWords.join(', ');
+                            const newTranslatedText = translatedWords.join(', ');
+                            
+                            // 如果新的原文已存在，合併翻譯（保留較長的）
+                            if (updatedEntries.has(newSource)) {
+                                const existingTranslated = updatedEntries.get(newSource);
+                                if (newTranslatedText.length > existingTranslated.length) {
+                                    updatedEntries.set(newSource, newTranslatedText);
+                                }
+                            } else {
+                                updatedEntries.set(newSource, newTranslatedText);
+                            }
+                        } else {
+                            // 不包含要編輯的單字，保持原樣
+                            updatedEntries.set(source, oldTranslated);
+                        }
+                    } else {
+                        // 長度不一致，保持原樣
+                        updatedEntries.set(source, oldTranslated);
+                    }
+                });
+                
+                // 刪除舊的緩存並添加新的
+                TranslateCacheService.clearAllTranslateCache();
+                updatedEntries.forEach((translated, source) => {
+                    TranslateCacheService.addTranslateCache(source, translated);
+                });
+                
+                // 重新渲染
+                const wordCache = this._getWordCacheFromTranslateCache();
+                this._renderTranslateWordCacheList(wordCache, container, nodeId, inputId);
+                
+                logger.debug(`翻譯單字緩存 | 編輯成功 | 原文:${word} -> ${newWord} | 翻譯:${translated} -> ${newTranslated}`);
+            }
+        });
+    }
+
+    /**
+     * 刪除單字緩存
+     */
+    static _handleDeleteWordCache(word, nodeId, inputId, container) {
+        createConfirmPopup({
+            title: '確認刪除',
+            message: `確定要刪除單字「${word}」及其翻譯嗎？`,
+            onConfirm: () => {
+                // 從翻譯緩存中移除包含這個單字的所有條目
+                const cache = TranslateCacheService.getAllTranslateCache();
+                const updatedEntries = new Map();
+                
+                cache.forEach((translated, source) => {
+                    const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                    const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                    
+                    if (sourceWords.length === translatedWords.length) {
+                        // 檢查是否包含要刪除的單字
+                        const wordIndex = sourceWords.indexOf(word);
+                        if (wordIndex !== -1) {
+                            // 移除單字和對應的翻譯
+                            sourceWords.splice(wordIndex, 1);
+                            translatedWords.splice(wordIndex, 1);
+                            
+                            // 如果還有其他單字，重新組合
+                            if (sourceWords.length > 0) {
+                                const newSource = sourceWords.join(', ');
+                                const newTranslatedText = translatedWords.join(', ');
+                                updatedEntries.set(newSource, newTranslatedText);
+                            }
+                            // 如果沒有其他單字了，就不添加到更新列表中（即刪除）
+                        } else {
+                            // 不包含要刪除的單字，保持原樣
+                            updatedEntries.set(source, translated);
+                        }
+                    } else {
+                        // 長度不一致，保持原樣
+                        updatedEntries.set(source, translated);
+                    }
+                });
+                
+                // 更新緩存
+                TranslateCacheService.clearAllTranslateCache();
+                updatedEntries.forEach((translated, source) => {
+                    TranslateCacheService.addTranslateCache(source, translated);
+                });
+                
+                // 重新渲染
+                const wordCache = this._getWordCacheFromTranslateCache();
+                this._renderTranslateWordCacheList(wordCache, container, nodeId, inputId);
+                
+                logger.debug(`翻譯單字緩存 | 刪除成功 | 單字:${word}`);
+            }
+        });
+    }
+
+    /**
      * 删除翻译缓存项目
      */
     static _deleteTranslateCacheItem(source, container, nodeId, inputId) {
@@ -5578,6 +5913,12 @@ class TagManager {
      * 渲染翻译单字缓存列表
      */
     static _renderTranslateWordCacheList(wordCache, container, nodeId, inputId) {
+        // 清理之前的事件監聽器
+        if (container._translateWordCacheItemCleanups) {
+            container._translateWordCacheItemCleanups.forEach(cleanup => cleanup());
+            container._translateWordCacheItemCleanups = [];
+        }
+        
         container.innerHTML = '';
         
         // 獲取輸入框內容
@@ -5604,7 +5945,10 @@ class TagManager {
             
             // 點擊整個 item：已選取則移除，未選取則插入
             item.style.cursor = 'pointer';
-            item.onclick = () => {
+            item.onclick = (e) => {
+                // 如果點擊的是右鍵菜單，不處理
+                if (e.button === 2 || e.ctrlKey || e.metaKey) return;
+                
                 if (isUsed) {
                     // 移除單字
                     this._removeWordFromInput(word, nodeId, inputId);
@@ -5613,6 +5957,19 @@ class TagManager {
                     this._insertTranslateCacheText(word, nodeId, inputId);
                 }
             };
+            
+            // 添加右鍵菜單事件
+            const contextMenuCleanup = EventManager.addDOMListener(item, 'contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this._showTranslateWordCacheContextMenu(e, word, translated, nodeId, inputId, container);
+            });
+            
+            // 保存清理函數
+            if (!container._translateWordCacheItemCleanups) {
+                container._translateWordCacheItemCleanups = [];
+            }
+            container._translateWordCacheItemCleanups.push(contextMenuCleanup);
             
             // 创建文字容器，顯示「原文/翻譯」格式
             const textContainer = document.createElement('div');
