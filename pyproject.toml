@@ -1,6 +1,6 @@
 [project]
 name = "prompt-assistant"
-version = "2.0.4"
+version = "1.0.0"
 description = "提示词小助手可以一键调用GLM、gemini、ChatGPT、Grok、Qwen等在线大模型以及本地Ollama大模型。实现提示词、markdown节点翻译、润色扩写、图片视频反推。支持提示词预设实现一键插入、历史提示词查找等功能。是一个全能型提示词插件。This prompt assistant plugin supports one-click access to online LLMs including GLM, Gemini, ChatGPT, Grok, Qwen, and local Ollama models. It provides prompt generation, Markdown node translation, polishing, expansion, image and video prompt reverse engineering, and more. The plugin also features prompt presets for one‑click insertion and prompt history search, making it an all‑in‑one prompt utility for ComfyUI."
 readme = "README.md"
 license = {text = "GNU General Public License v3"}
@@ -9,7 +9,7 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/yawiii/ComfyUI-Prompt-Assistant"
+Repository = "https://github.com/oreml/ComfyUI-Prompt-Assistant-block"
 
 
 [tool.setuptools.dynamic]
@@ -17,6 +17,6 @@ dependencies = {file = ["requirements.txt"]}
 
 [tool.comfy]
 
-PublisherId = "yawiii"
-DisplayName = "Prompt Assistant" 
+PublisherId = "oreml"
+DisplayName = "Prompt Assistant block" 
 Icon = "https://raw.githubusercontent.com/yawiii/assets/refs/heads/main/prompt_assistant/icon.png" 
