@@ -8,6 +8,7 @@ import { logger } from '../utils/logger.js';
 import { FEATURES } from "../services/features.js";
 import { HistoryManager } from "./history.js";
 import { TagManager } from "./tag.js";
+import { TextGridManager } from "./textGrid.js";
 import { HistoryCacheService, TagCacheService, TranslateCacheService, CACHE_CONFIG, CacheService } from "../services/cache.js";
 import { EventManager } from "../utils/eventManager.js";
 import { ResourceManager } from "../utils/resourceManager.js";
@@ -1695,6 +1696,59 @@ class PromptAssistant {
                 visible: !isNoteNode && FEATURES.history // Note节点不显示，且跟随历史功能开关
             },
             {
+                id: 'textGrid',
+                title: '文字 Grid',
+                icon: 'icon-tag',
+                onClick: (e, widget) => {
+                    // 創建一個帶有文字選擇功能的顯示函數
+                    const showTextGridPopup = (options) => {
+                        // 處理文字選擇功能
+                        const enhancedOptions = {
+                            ...options,
+                            onTextSelect: (text, value, item) => {
+                                // 獲取當前輸入框的值和光標位置
+                                const currentValue = widget.inputEl.value;
+                                const cursorPos = widget.inputEl.selectionStart;
+                                const beforeText = currentValue.substring(0, cursorPos);
+                                const afterText = currentValue.substring(widget.inputEl.selectionEnd);
+
+                                // 添加文字（使用 value 或 text）
+                                const textToInsert = value || text;
+                                const newValue = beforeText + textToInsert + afterText;
+
+                                // 更新輸入框內容並添加高亮效果
+                                this.updateInputWithHighlight(widget, newValue);
+
+                                // 更新光標位置
+                                const newPos = cursorPos + textToInsert.length;
+                                widget.inputEl.setSelectionRange(newPos, newPos);
+
+                                // 保持焦點在輸入框
+                                widget.inputEl.focus();
+
+                                // 關閉彈窗
+                                TextGridManager.hideTextGridPopup();
+                            },
+                            // 可以從輸入框獲取文字項目，或使用默認項目
+                            textItems: this._getTextGridItems(widget)
+                        };
+
+                        // 調用文字 Grid 管理器顯示彈窗
+                        TextGridManager.showTextGridPopup(enhancedOptions);
+                    };
+
+                    // 使用統一的彈窗按鈕點擊處理
+                    UIToolkit.handlePopupButtonClick(
+                        e,
+                        widget,
+                        'textGrid',
+                        showTextGridPopup,
+                        TextGridManager.hideTextGridPopup.bind(TextGridManager)
+                    );
+                },
+                visible: !isNoteNode && FEATURES.tag // Note节点不显示此按钮，使用標籤功能的開關
+            },
+            {
                 id: 'tag',
                 title: '标签工具',
                 icon: 'icon-tag',
@@ -3096,6 +3150,86 @@ class PromptAssistant {
             widget._eventCleanupFunctions = widget._eventCleanupFunctions || [];
             widget._eventCleanupFunctions.push(cleanup);
         }
+    }
+
+    /**
+     * 獲取文字 Grid 項目列表
+     * 從輸入框內容中解析並提取文字項目
+     */
+    _getTextGridItems(widget) {
+        const inputValue = widget.inputEl.value || '';
+        
+        if (!inputValue.trim()) {
+            // 如果輸入框為空，返回空數組
+            return [];
+        }
+        
+        // 解析輸入框文字，提取詞組
+        // 支持多種分隔符：逗號、換行、多個空格等
+        const items = [];
+        
+        // 先按換行分割
+        const lines = inputValue.split(/\r?\n/);
+        
+        lines.forEach(line => {
+            // 移除首尾空白
+            const trimmedLine = line.trim();
+            if (!trimmedLine) return;
+            
+            // 按逗號分割（支持中英文逗號）
+            const parts = trimmedLine.split(/[,，、]/);
+            
+            parts.forEach(part => {
+                // 移除首尾空白和括號
+                let text = part.trim();
+                
+                // 移除常見的括號和標記
+                text = text.replace(/^[\(（\[\【\{「『]+|[\)）\]\】\}」』]+$/g, '');
+                text = text.trim();
+                
+                // 如果文字不為空且長度合理，添加到列表
+                if (text && text.length > 0 && text.length <= 100) {
+                    // 檢查是否已存在（避免重複）
+                    const exists = items.some(item => item.text === text || item.value === text);
+                    if (!exists) {
+                        items.push({
+                            text: text,
+                            value: text
+                        });
+                    }
+                }
+            });
+        });
+        
+        // 如果解析後沒有項目，嘗試按空格分割（作為備用方案）
+        if (items.length === 0 && inputValue.trim()) {
+            const words = inputValue.trim().split(/\s+/);
+            words.forEach(word => {
+                const trimmedWord = word.trim();
+                if (trimmedWord && trimmedWord.length > 0 && trimmedWord.length <= 50) {
+                    items.push({
+                        text: trimmedWord,
+                        value: trimmedWord
+                    });
+                }
+            });
+        }
+        
+        // 如果還是沒有項目，至少顯示整個輸入內容（如果不太長）
+        if (items.length === 0 && inputValue.trim().length <= 100) {
+            items.push({
+                text: inputValue.trim(),
+                value: inputValue.trim()
+            });
+        }
+        
+        logger.debug('解析輸入框文字', { 
+            inputLength: inputValue.length,
+            itemsCount: items.length,
+            items: items.slice(0, 10) // 只記錄前10個
+        });
+        
+        return items;
     }
 }
 
