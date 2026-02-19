@@ -1698,7 +1698,7 @@ class PromptAssistant {
             {
                 id: 'textGrid',
                 title: '文字 Grid',
-                icon: 'icon-tag',
+                icon: 'icon-textGrid',
                 onClick: (e, widget) => {
                     // 創建一個帶有文字選擇功能的顯示函數
                     const showTextGridPopup = (options) => {

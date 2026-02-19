@@ -95,6 +95,7 @@ class ResourceManager {
             'icon-undo.svg',
             'icon-redo.svg',
             'icon-tag.svg',
+            'icon-textGrid.svg',
             'icon-expand.svg',
             'icon-translate.svg',
             'icon-caption-zh.svg',
