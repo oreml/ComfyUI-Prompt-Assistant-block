@@ -152,6 +152,7 @@ async def get_services_list(request):
         
         # 移除敏感信息
         safe_services = []
+        service_ids_in_response = []
         for service in services:
             safe_service = service.copy()
             # 移除加密的API Key
@@ -160,6 +161,20 @@ async def get_services_list(request):
             # 添加掩码信息
             safe_service['has_api_key'] = bool(service.get('api_key_encrypted'))
             safe_services.append(safe_service)
+            service_ids_in_response.append(service.get('id', 'unknown'))
+        
+        # 記錄返回的服務列表
+        print(f"{PREFIX} 返回服務商列表 | 總數:{len(safe_services)} | IDs:{', '.join(service_ids_in_response)}")
+        
+        # 檢查 OpenRouter 是否在返回列表中
+        openrouter_in_response = any(s.get('id') == 'openrouter' for s in safe_services)
+        if not openrouter_in_response:
+            print(f"{PREFIX} ⚠️ OpenRouter 未在返回的服務列表中")
+        else:
+            openrouter_service = next((s for s in safe_services if s.get('id') == 'openrouter'), None)
+            if openrouter_service:
+                vlm_models_count = len(openrouter_service.get('vlm_models', []))
+                print(f"{PREFIX} ✅ OpenRouter 在返回列表中 | vlm_models 數量:{vlm_models_count}")
         
         return web.json_response({
             "success": True,
@@ -294,6 +309,13 @@ async def delete_service(request):
     """
     try:
         service_id = request.match_info['service_id']
+        
+        # 檢查是否為預設服務
+        if service_id in config_manager.PRESET_SERVICE_IDS:
+            return web.json_response({
+                "success": False,
+                "error": f"預設服務商 '{service_id}' 不可刪除"
+            }, status=400)
         
         success = config_manager.delete_service(service_id)
         

@@ -529,7 +529,7 @@ class MigrationTool:
         策略:
         - 补全用户已有服务的缺失字段
         - 追加模板中用户不存在的服务商（版本更新时的新服务商）
-        - 不覆盖 llm_models/vlm_models（用户自定义的模型列表）
+        - 如果用户的 llm_models/vlm_models 為空，則從模板補全（保護用戶自定義的模型列表）
         """
         if 'model_services' not in default_config:
             return
@@ -558,7 +558,12 @@ class MigrationTool:
             # 补全服务级别的缺失字段
             for key, value in template_service.items():
                 if key in ['llm_models', 'vlm_models']:
-                    # 模型列表不补全（用户自定义）
+                    # 如果用戶的模型列表為空（不存在或為空數組），且模板中有模型，則從模板補全
+                    user_models = user_service.get(key)
+                    if not user_models and value:  # 用戶為空且模板有值
+                        user_service[key] = copy.deepcopy(value)
+                        self._log(f"[config.json] 補全服務 '{service_name}' 的 {key}（從模板）")
+                    # 如果用戶已有模型列表，則不覆蓋（保護用戶自定義）
                     continue
                 if key not in user_service:
                     user_service[key] = copy.deepcopy(value)

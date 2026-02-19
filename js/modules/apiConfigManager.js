@@ -93,6 +93,42 @@ class APIConfigManager {
 
             if (servicesData.success) {
                 this.services = servicesData.services || [];
+                
+                // 記錄載入的服務列表
+                const serviceIds = this.services.map(s => s.id || 'unknown');
+                const serviceNames = this.services.map(s => s.name || 'unknown');
+                logger.debug('載入服務商列表', {
+                    total: this.services.length,
+                    ids: serviceIds.join(', '),
+                    names: serviceNames.join(', ')
+                });
+                
+                // 檢查 OpenRouter 是否存在
+                const openrouterService = this.services.find(s => s.id === 'openrouter');
+                if (!openrouterService) {
+                    logger.warn('⚠️ OpenRouter 未在載入的服務列表中', {
+                        loadedServices: serviceIds,
+                        presetServiceIds: APIConfigManager.PRESET_SERVICE_IDS
+                    });
+                } else {
+                    const vlmModelsCount = (openrouterService.vlm_models || []).length;
+                    logger.debug('✅ OpenRouter 已載入', {
+                        id: openrouterService.id,
+                        name: openrouterService.name,
+                        vlmModelsCount: vlmModelsCount,
+                        hasVlmModels: vlmModelsCount > 0
+                    });
+                    
+                    if (vlmModelsCount === 0) {
+                        logger.warn('⚠️ OpenRouter 的 vlm_models 為空', {
+                            service: openrouterService
+                        });
+                    }
+                }
+            } else {
+                logger.error('載入服務商列表失敗', {
+                    error: servicesData.error
+                });
             }
 
             // 加载 Google 翻译配置
@@ -1010,8 +1046,8 @@ class APIConfigManager {
         const serviceId = (service.id || '').toLowerCase();
         const searchText = `${serviceName} ${serviceId}`.toLowerCase();
 
-        // OpenRouter服务检测（首位）
-        if (searchText.includes('openrouter') || searchText.includes('open router')) {
+        // OpenRouter服务检测（首位）- 優先檢測 serviceId 確保準確匹配
+        if (serviceId === 'openrouter' || searchText.includes('openrouter') || searchText.includes('open router')) {
             links.push({
                 text: '开通OpenRouter API服务',
                 url: 'https://openrouter.ai/',
@@ -1019,8 +1055,8 @@ class APIConfigManager {
             });
         }
 
-        // 智谱服务检测
-        if (searchText.includes('智谱') || searchText.includes('zhipu')) {
+        // 智谱服务检测 - 優先檢測 serviceId 確保準確匹配
+        if (serviceId === 'zhipu' || searchText.includes('智谱') || searchText.includes('zhipu')) {
             links.push({
                 text: '开通智谱API服务',
                 url: 'https://www.bigmodel.cn/invite?icode=Wz1tQAT40T9M8vwp%2F1db7nHEaazDlIZGj9HxftzTbt4%3D',

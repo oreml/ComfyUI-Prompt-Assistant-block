@@ -6,6 +6,8 @@ import shutil
 import folder_paths
 
 class ConfigManager:
+    # 預設服務商ID列表（不可刪除）
+    PRESET_SERVICE_IDS = ['openrouter', 'zhipu', 'xFlow', 'ollama']
     def __init__(self):
         # 插件目录
         self.dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -1162,9 +1164,55 @@ class ConfigManager:
         config = self.load_config()
         
         if self._is_v2_config(config):
-            return config.get('model_services', [])
+            services = config.get('model_services', [])
+            
+            # 記錄載入的服務列表
+            service_ids = [s.get('id', 'unknown') for s in services]
+            service_names = [s.get('name', 'unknown') for s in services]
+            self._log(f"載入服務商列表 | 總數:{len(services)} | IDs:{', '.join(service_ids)}")
+            
+            # 檢查並補全缺失的預設服務
+            import copy
+            service_ids_set = {s.get('id') for s in services if s.get('id')}
+            template_services = self.default_config.get('model_services', [])
+            template_services_map = {s.get('id'): s for s in template_services if s.get('id')}
+            
+            missing_preset_services = []
+            for preset_id in self.PRESET_SERVICE_IDS:
+                if preset_id not in service_ids_set and preset_id in template_services_map:
+                    # 從模板中複製預設服務
+                    new_service = copy.deepcopy(template_services_map[preset_id])
+                    services.append(new_service)
+                    missing_preset_services.append(preset_id)
+                    self._log(f"🔧 自動補全缺失的預設服務: {new_service.get('name', preset_id)} (ID: {preset_id})")
+            
+            # 如果有補全服務，保存配置
+            if missing_preset_services:
+                self._log(f"🔧 補全了 {len(missing_preset_services)} 個預設服務: {', '.join(missing_preset_services)}")
+                config['model_services'] = services
+                self.save_config(config)
+            
+            # 檢查 OpenRouter 是否存在
+            openrouter_exists = any(s.get('id') == 'openrouter' for s in services)
+            if not openrouter_exists:
+                self._log(f"⚠️ OpenRouter 未在服務列表中 | 預設服務ID列表:{', '.join(self.PRESET_SERVICE_IDS)}")
+                # 檢查 OpenRouter 的 vlm_models
+                for service in services:
+                    if service.get('id') == 'openrouter':
+                        vlm_models = service.get('vlm_models', [])
+                        self._log(f"OpenRouter vlm_models 數量: {len(vlm_models)}")
+                        if not vlm_models:
+                            self._log(f"⚠️ OpenRouter 的 vlm_models 為空")
+            else:
+                openrouter_service = next((s for s in services if s.get('id') == 'openrouter'), None)
+                if openrouter_service:
+                    vlm_models = openrouter_service.get('vlm_models', [])
+                    self._log(f"✅ OpenRouter 已載入 | vlm_models 數量:{len(vlm_models)}")
+            
+            return services
         else:
             # v1.0不支持此功能
+            self._log("⚠️ 配置版本過低 (v1.0)，無法載入服務商列表")
             return []
     
     def get_service(self, service_id: str):
@@ -1326,6 +1374,11 @@ class ConfigManager:
             bool: 成功返回True
         """
         try:
+            # 檢查是否為預設服務，預設服務不可刪除
+            if service_id in self.PRESET_SERVICE_IDS:
+                self._log(f"删除服务商失败: 預設服務商不可刪除 (ID: {service_id})")
+                return False
+            
             config = self.load_config()
             
             if not self._is_v2_config(config):
