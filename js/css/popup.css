@@ -1541,6 +1541,20 @@
     box-shadow: none;
 }
 
+/* 已選取狀態 - 參考 tag_item.used */
+.translate_word_cache_grid .translate_cache_item.used {
+    background-color: rgba(40, 120, 40, 0.8);
+    border-color: rgba(100, 255, 100, 0.2);
+}
+
+.translate_word_cache_grid .translate_cache_item.used:hover {
+    background-color: rgba(50, 140, 50, 0.9);
+}
+
+.translate_word_cache_grid .translate_cache_item.used .translate_word_cache_text {
+    color: rgba(200, 255, 200, 0.9);
+}
+
 .translate_cache_item:hover {
     border-color: var(--p-primary-color, #4a9eff);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);

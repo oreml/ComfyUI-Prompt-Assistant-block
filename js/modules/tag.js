@@ -4432,6 +4432,11 @@ class TagManager {
                     } else if (contentId === '已插入') {
                         this._loadInsertedTagsContent(content);
                     } else if (contentId === '翻譯單字緩存') {
+                        // 清理之前的事件監聽器
+                        if (content._translateWordCacheCleanup) {
+                            content._translateWordCacheCleanup.forEach(cleanup => cleanup());
+                            content._translateWordCacheCleanup = [];
+                        }
                         this._loadTranslateWordCacheContent(content, nodeId, inputId);
                     }
                     // 对于普通标签页，仅在首次加载
@@ -5355,18 +5360,108 @@ class TagManager {
         const beforeText = inputEl.value.substring(0, cursorPos);
         const afterText = inputEl.value.substring(inputEl.selectionEnd);
         
-        const newValue = beforeText + text + afterText;
+        // 檢查前面是否需要添加逗號和空格
+        let prefix = '';
+        if (beforeText.trim() && !beforeText.match(/[,，、\s]$/)) {
+            prefix = ', ';
+        }
+        
+        const newValue = beforeText + prefix + text + afterText;
         inputEl.value = newValue;
         
         // 触发输入事件以更新节点
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         
         // 更新光标位置
-        const newPos = cursorPos + text.length;
+        const newPos = cursorPos + prefix.length + text.length;
         inputEl.setSelectionRange(newPos, newPos);
         inputEl.focus();
         
         logger.debug(`翻譯緩存 | 插入文字 | 長度:${text.length}`);
+        
+        // 觸發 input 事件會自動觸發監聽器更新狀態，這裡不需要手動重新渲染
+        // 但如果彈窗未打開，則需要手動更新（通過延遲確保事件已觸發）
+        setTimeout(() => {
+            const content = inputEl.closest('.popup_tab_content');
+            if (content && content.querySelector('.translate_word_cache_grid')) {
+                const wordCache = this._getWordCacheFromTranslateCache();
+                const listContainer = content.querySelector('.translate_word_cache_grid');
+                if (listContainer) {
+                    this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
+                }
+            }
+        }, 0);
+    }
+
+    /**
+     * 從輸入框中移除單字
+     */
+    static _removeWordFromInput(word, nodeId, inputId) {
+        const mapping = UIToolkit._findMapping(nodeId, inputId);
+        if (!mapping || !mapping.inputEl) return;
+        
+        const inputEl = mapping.inputEl;
+        let inputValue = inputEl.value;
+        
+        // 使用正則表達式移除單字（匹配單字邊界）
+        const wordRegex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
+        inputValue = inputValue.replace(wordRegex, '');
+        
+        // 清理多餘的逗號和空格
+        inputValue = inputValue
+            .replace(/,\s*,/g, ',')  // 連續逗號
+            .replace(/,\s*$/g, '')   // 結尾逗號
+            .replace(/^\s*,\s*/g, '') // 開頭逗號
+            .replace(/\s+/g, ' ')    // 多個空格
+            .trim();
+        
+        inputEl.value = inputValue;
+        
+        // 触发输入事件以更新节点
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        
+        inputEl.focus();
+        
+        logger.debug(`翻譯緩存 | 移除單字 | 單字:${word}`);
+        
+        // 觸發 input 事件會自動觸發監聽器更新狀態，這裡不需要手動重新渲染
+        // 但如果彈窗未打開，則需要手動更新（通過延遲確保事件已觸發）
+        setTimeout(() => {
+            const content = inputEl.closest('.popup_tab_content');
+            if (content && content.querySelector('.translate_word_cache_grid')) {
+                const wordCache = this._getWordCacheFromTranslateCache();
+                const listContainer = content.querySelector('.translate_word_cache_grid');
+                if (listContainer) {
+                    this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
+                }
+            }
+        }, 0);
+    }
+
+    /**
+     * 從翻譯緩存中提取單字緩存
+     */
+    static _getWordCacheFromTranslateCache() {
+        const cache = TranslateCacheService.getAllTranslateCache();
+        const wordCache = new Map();
+        
+        cache.forEach((translated, source) => {
+            const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            
+            if (sourceWords.length === translatedWords.length && sourceWords.length > 0) {
+                sourceWords.forEach((word, index) => {
+                    const translatedWord = translatedWords[index];
+                    if (word && translatedWord) {
+                        if (!wordCache.has(word) || wordCache.get(word).length < translatedWord.length) {
+                            wordCache.set(word, translatedWord);
+                        }
+                    }
+                });
+            }
+        });
+        
+        return wordCache;
     }
 
     /**
@@ -5408,30 +5503,8 @@ class TagManager {
         content.innerHTML = '';
         content.setAttribute('data-loaded', 'true');
 
-        // 获取所有翻译缓存
-        const cache = TranslateCacheService.getAllTranslateCache();
-        
-        // 提取所有单字及其翻译
-        const wordCache = new Map();
-        
-        cache.forEach((translated, source) => {
-            // 按逗號、中文逗號、頓號分割
-            const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
-            const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
-            
-            // 確保分割後的數量一致
-            if (sourceWords.length === translatedWords.length && sourceWords.length > 0) {
-                sourceWords.forEach((word, index) => {
-                    const translatedWord = translatedWords[index];
-                    if (word && translatedWord) {
-                        // 如果單字已存在，保留較長的翻譯（通常更完整）
-                        if (!wordCache.has(word) || wordCache.get(word).length < translatedWord.length) {
-                            wordCache.set(word, translatedWord);
-                        }
-                    }
-                });
-            }
-        });
+        // 获取所有单字缓存
+        const wordCache = this._getWordCacheFromTranslateCache();
         
         if (wordCache.size === 0) {
             // 显示空状态
@@ -5472,6 +5545,33 @@ class TagManager {
 
         // 渲染单字缓存列表
         this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
+        
+        // 添加輸入框事件監聽器，當輸入框內容變化時自動更新 grid item 狀態
+        const mapping = UIToolkit._findMapping(nodeId, inputId);
+        if (mapping && mapping.inputEl) {
+            const inputEl = mapping.inputEl;
+            
+            // 創建更新函數
+            const updateGridState = () => {
+                const wordCache = this._getWordCacheFromTranslateCache();
+                this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
+            };
+            
+            // 添加輸入事件監聽器
+            const inputListener = () => {
+                updateGridState();
+            };
+            
+            inputEl.addEventListener('input', inputListener);
+            
+            // 保存清理函數，以便在標籤頁切換時清理
+            if (!content._translateWordCacheCleanup) {
+                content._translateWordCacheCleanup = [];
+            }
+            content._translateWordCacheCleanup.push(() => {
+                inputEl.removeEventListener('input', inputListener);
+            });
+        }
     }
 
     /**
@@ -5480,21 +5580,38 @@ class TagManager {
     static _renderTranslateWordCacheList(wordCache, container, nodeId, inputId) {
         container.innerHTML = '';
         
+        // 獲取輸入框內容
+        const mapping = UIToolkit._findMapping(nodeId, inputId);
+        const inputValue = mapping?.inputEl?.value || '';
+        
         // 按單字排序（字母順序）
         const sortedEntries = Array.from(wordCache.entries()).sort((a, b) => {
             return a[0].localeCompare(b[0], undefined, { sensitivity: 'base' });
         });
         
         sortedEntries.forEach(([word, translated]) => {
+            // 檢查單字是否在輸入框中（使用正則表達式匹配單字邊界）
+            const wordRegex = new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`);
+            const isUsed = wordRegex.test(inputValue);
+            
             const item = document.createElement('div');
             item.className = 'translate_cache_item translate_word_cache_item';
+            if (isUsed) {
+                item.classList.add('used');
+            }
             item.dataset.source = word;
             item.dataset.translated = translated;
             
-            // 點擊整個 item 插入原文
+            // 點擊整個 item：已選取則移除，未選取則插入
             item.style.cursor = 'pointer';
             item.onclick = () => {
-                this._insertTranslateCacheText(word, nodeId, inputId);
+                if (isUsed) {
+                    // 移除單字
+                    this._removeWordFromInput(word, nodeId, inputId);
+                } else {
+                    // 插入單字
+                    this._insertTranslateCacheText(word, nodeId, inputId);
+                }
             };
             
             // 创建文字容器，顯示「原文/翻譯」格式
@@ -5534,27 +5651,8 @@ class TagManager {
         const listContainer = content.querySelector('.translate_word_cache_grid');
         if (!listContainer) return;
         
-        // 获取所有翻译缓存
-        const cache = TranslateCacheService.getAllTranslateCache();
-        
-        // 提取所有单字及其翻译
-        const wordCache = new Map();
-        
-        cache.forEach((translated, source) => {
-            const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
-            const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
-            
-            if (sourceWords.length === translatedWords.length && sourceWords.length > 0) {
-                sourceWords.forEach((word, index) => {
-                    const translatedWord = translatedWords[index];
-                    if (word && translatedWord) {
-                        if (!wordCache.has(word) || wordCache.get(word).length < translatedWord.length) {
-                            wordCache.set(word, translatedWord);
-                        }
-                    }
-                });
-            }
-        });
+        // 获取所有单字缓存
+        const wordCache = this._getWordCacheFromTranslateCache();
         
         if (!keyword || keyword.trim() === '') {
             // 显示所有单字缓存
