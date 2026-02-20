@@ -1120,7 +1120,8 @@
     cursor: not-allowed !important;
 }
 
-.text_grid_item_disabled .text_grid_item_text {
+.text_grid_item_disabled .text_grid_item_original,
+.text_grid_item_disabled .text_grid_item_translated {
     text-decoration: line-through;
     color: var(--p-text-muted-color) !important;
 }
@@ -1137,6 +1138,31 @@
     display: none;
 }
 
+.text_grid_item_text_container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+}
+
+.text_grid_item_original {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--p-inputtext-color);
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.text_grid_item_translated {
+    font-size: 12px;
+    color: var(--p-text-muted-color, rgba(255, 255, 255, 0.7));
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+/* 相容舊的單行顯示 */
 .text_grid_item_text {
     font-size: 14px;
     color: var(--p-inputtext-color);

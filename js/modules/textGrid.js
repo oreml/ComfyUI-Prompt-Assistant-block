@@ -134,17 +134,44 @@ class TextGridManager {
                 gridItem.style.textAlign = 'center';
                 gridItem.style.userSelect = 'none';
                 gridItem.style.border = '1px solid transparent';
-                gridItem.dataset.textValue = item.value || item.text; // 保存文字值用於排序後更新
+                // 用於寫回輸入框的值：原文（若有 original 則為原文，否則為 text）
+                const sourceValue = item.original != null ? item.original : (item.value || item.text);
+                gridItem.dataset.textValue = sourceValue;
                 gridItem.dataset.disabled = 'false'; // 初始狀態為啟用
 
-                const itemText = document.createElement('div');
-                itemText.className = 'text_grid_item_text';
-                itemText.textContent = item.text || item.value || `項目 ${index + 1}`;
-                itemText.style.fontSize = '14px';
-                itemText.style.color = 'var(--p-inputtext-color)';
-                itemText.style.wordBreak = 'break-word';
+                // 原文/翻譯顯示：若有 original 則為「原文=original / 翻譯=text」，否則為「原文=text / 翻譯=translated」
+                const displayOriginal = item.original != null ? item.original : (item.text || item.value || `項目 ${index + 1}`);
+                const displayTranslated = item.original != null ? item.text : (item.translated || null);
 
-                gridItem.appendChild(itemText);
+                const textContainer = document.createElement('div');
+                textContainer.className = 'text_grid_item_text_container';
+                textContainer.style.display = 'flex';
+                textContainer.style.flexDirection = 'column';
+                textContainer.style.gap = '4px';
+                textContainer.style.width = '100%';
+                textContainer.style.alignItems = 'center';
+                textContainer.style.justifyContent = 'center';
+
+                const originalEl = document.createElement('div');
+                originalEl.className = 'text_grid_item_original';
+                originalEl.textContent = displayOriginal;
+                originalEl.style.fontSize = '14px';
+                originalEl.style.color = 'var(--p-inputtext-color)';
+                originalEl.style.wordBreak = 'break-word';
+                originalEl.style.fontWeight = '600';
+                textContainer.appendChild(originalEl);
+
+                if (displayTranslated) {
+                    const translatedEl = document.createElement('div');
+                    translatedEl.className = 'text_grid_item_translated';
+                    translatedEl.textContent = displayTranslated;
+                    translatedEl.style.fontSize = '12px';
+                    translatedEl.style.color = 'var(--p-text-muted-color, rgba(255,255,255,0.7))';
+                    translatedEl.style.wordBreak = 'break-word';
+                    textContainer.appendChild(translatedEl);
+                }
+
+                gridItem.appendChild(textContainer);
 
                 // 點擊切換禁用狀態
                 // 使用標記追蹤是否發生拖動
@@ -295,26 +322,31 @@ class TextGridManager {
      * 更新項目的禁用狀態樣式
      */
     static _updateItemDisabledState(gridItem, isDisabled) {
-        const itemText = gridItem.querySelector('.text_grid_item_text');
+        const originalEl = gridItem.querySelector('.text_grid_item_original');
+        const translatedEl = gridItem.querySelector('.text_grid_item_translated');
         
         if (isDisabled) {
             // 禁用狀態：灰色背景、刪除線、降低透明度
             gridItem.classList.add('text_grid_item_disabled');
             gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 30%)';
             gridItem.style.opacity = '0.5';
-            if (itemText) {
-                itemText.style.textDecoration = 'line-through';
-                itemText.style.color = 'var(--p-text-muted-color)';
-            }
+            [originalEl, translatedEl].filter(Boolean).forEach(el => {
+                el.style.textDecoration = 'line-through';
+                el.style.color = 'var(--p-text-muted-color)';
+            });
             gridItem.style.cursor = 'not-allowed';
         } else {
             // 啟用狀態：恢復正常樣式
             gridItem.classList.remove('text_grid_item_disabled');
             gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%)';
             gridItem.style.opacity = '1';
-            if (itemText) {
-                itemText.style.textDecoration = 'none';
-                itemText.style.color = 'var(--p-inputtext-color)';
+            if (originalEl) {
+                originalEl.style.textDecoration = 'none';
+                originalEl.style.color = 'var(--p-inputtext-color)';
+            }
+            if (translatedEl) {
+                translatedEl.style.textDecoration = 'none';
+                translatedEl.style.color = 'var(--p-text-muted-color, rgba(255,255,255,0.7))';
             }
             gridItem.style.cursor = 'grab';
         }
@@ -330,7 +362,11 @@ class TextGridManager {
         const items = Array.from(gridContainer.querySelectorAll('.text_grid_item'));
         const textValues = items
             .filter(item => item.dataset.disabled !== 'true') // 只包含未禁用的項目
-            .map(item => item.dataset.textValue || item.textContent.trim())
+            .map(item => {
+                // 優先使用 dataset.textValue（原文），否則取原文區文字
+                const originalEl = item.querySelector('.text_grid_item_original');
+                return item.dataset.textValue || (originalEl ? originalEl.textContent.trim() : item.textContent.trim());
+            })
             .filter(Boolean);
 
         // 組合成新的輸入內容（用逗號分隔）

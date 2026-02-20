@@ -3170,9 +3170,24 @@ class PromptAssistant {
                     // 檢查是否已存在（避免重複）
                     const exists = items.some(item => item.text === text || item.value === text);
                     if (!exists) {
+                        // 嘗試從翻譯緩存獲取翻譯
+                        let translated = null;
+                        let original = null;
+                        try {
+                            const cacheResult = TranslateCacheService.queryTranslateCache(text);
+                            if (cacheResult && cacheResult.type === 'source' && cacheResult.translatedText) {
+                                translated = cacheResult.translatedText;
+                            } else if (cacheResult && cacheResult.type === 'translated' && cacheResult.sourceText) {
+                                original = cacheResult.sourceText; // 當前輸入是譯文，原文為 sourceText
+                            }
+                        } catch (err) {
+                            // 忽略緩存查詢錯誤
+                        }
                         items.push({
                             text: text,
-                            value: text
+                            value: text,
+                            translated: translated || undefined,
+                            original: original || undefined
                         });
                     }
                 }
@@ -3185,9 +3200,17 @@ class PromptAssistant {
             words.forEach(word => {
                 const trimmedWord = word.trim();
                 if (trimmedWord && trimmedWord.length > 0 && trimmedWord.length <= 50) {
+                    let translated = null;
+                    try {
+                        const cacheResult = TranslateCacheService.queryTranslateCache(trimmedWord);
+                        if (cacheResult && cacheResult.type === 'source' && cacheResult.translatedText) {
+                            translated = cacheResult.translatedText;
+                        }
+                    } catch (err) {}
                     items.push({
                         text: trimmedWord,
-                        value: trimmedWord
+                        value: trimmedWord,
+                        translated: translated || undefined
                     });
                 }
             });
@@ -3195,9 +3218,18 @@ class PromptAssistant {
         
         // 如果還是沒有項目，至少顯示整個輸入內容（如果不太長）
         if (items.length === 0 && inputValue.trim().length <= 100) {
+            const t = inputValue.trim();
+            let translated = null;
+            try {
+                const cacheResult = TranslateCacheService.queryTranslateCache(t);
+                if (cacheResult && cacheResult.type === 'source' && cacheResult.translatedText) {
+                    translated = cacheResult.translatedText;
+                }
+            } catch (err) {}
             items.push({
-                text: inputValue.trim(),
-                value: inputValue.trim()
+                text: t,
+                value: t,
+                translated: translated || undefined
             });
         }
         
