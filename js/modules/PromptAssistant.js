@@ -3218,8 +3218,8 @@ class PromptAssistant {
                         items.push({
                             text: text,
                             value: text,
-                            translated: translated || undefined,
-                            original: original || undefined
+                            translated: translated != null && translated !== '' ? translated : undefined,
+                            original: original != null && original !== '' ? original : undefined
                         });
                     }
                 }

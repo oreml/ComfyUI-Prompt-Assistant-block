@@ -326,9 +326,9 @@ class TextGridManager {
         const translatedEl = gridItem.querySelector('.text_grid_item_translated');
         
         if (isDisabled) {
-            // 禁用狀態：灰色背景、刪除線、降低透明度
             gridItem.classList.add('text_grid_item_disabled');
-            gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 30%)';
+            gridItem.style.backgroundColor = 'color-mix(in srgb, var(--p-content-background), transparent 30%)';
+            gridItem.style.borderColor = 'var(--p-content-border-color)';
             gridItem.style.opacity = '0.5';
             [originalEl, translatedEl].filter(Boolean).forEach(el => {
                 el.style.textDecoration = 'line-through';
@@ -336,9 +336,9 @@ class TextGridManager {
             });
             gridItem.style.cursor = 'not-allowed';
         } else {
-            // 啟用狀態：恢復正常樣式
             gridItem.classList.remove('text_grid_item_disabled');
-            gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%)';
+            gridItem.style.backgroundColor = '';
+            gridItem.style.borderColor = '';
             gridItem.style.opacity = '1';
             if (originalEl) {
                 originalEl.style.textDecoration = 'none';
@@ -401,11 +401,6 @@ class TextGridManager {
 
         const gridContainer = document.createElement('div');
         gridContainer.className = 'text_grid_container text_grid_inline';
-        gridContainer.style.display = 'grid';
-        gridContainer.style.gridTemplateColumns = 'repeat(auto-fill, minmax(100px, 1fr))';
-        gridContainer.style.gap = '6px';
-        gridContainer.style.padding = '6px 0';
-        gridContainer.style.marginTop = '4px';
         container.appendChild(gridContainer);
 
         let sortableInstance = null;
@@ -414,46 +409,27 @@ class TextGridManager {
         const buildItemEl = (item, index) => {
             const gridItem = document.createElement('div');
             gridItem.className = 'text_grid_item';
-            gridItem.style.padding = '8px';
-            gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%)';
-            gridItem.style.borderRadius = '6px';
-            gridItem.style.cursor = 'grab';
-            gridItem.style.transition = 'all 0.2s ease';
-            gridItem.style.textAlign = 'center';
-            gridItem.style.userSelect = 'none';
-            gridItem.style.border = '1px solid transparent';
             const sourceValue = item.original != null ? item.original : (item.value || item.text);
             gridItem.dataset.textValue = sourceValue;
             gridItem.dataset.disabled = 'false';
 
             const displayOriginal = item.original != null ? item.original : (item.text || item.value || `項目 ${index + 1}`);
-            const displayTranslated = item.original != null ? item.text : (item.translated || null);
+            // 顯示翻譯：若有 original（當前輸入是譯文），則顯示當前輸入作為翻譯；否則顯示緩存中的 translated
+            const displayTranslated = item.original != null ? item.text : (item.translated != null && item.translated !== '' ? item.translated : null);
 
             const textContainer = document.createElement('div');
             textContainer.className = 'text_grid_item_text_container';
-            textContainer.style.display = 'flex';
-            textContainer.style.flexDirection = 'column';
-            textContainer.style.gap = '2px';
-            textContainer.style.width = '100%';
-            textContainer.style.alignItems = 'center';
-            textContainer.style.justifyContent = 'center';
 
             const originalEl = document.createElement('div');
             originalEl.className = 'text_grid_item_original';
             originalEl.textContent = displayOriginal;
-            originalEl.style.fontSize = '12px';
-            originalEl.style.color = 'var(--p-inputtext-color)';
-            originalEl.style.wordBreak = 'break-word';
-            originalEl.style.fontWeight = '600';
             textContainer.appendChild(originalEl);
 
-            if (displayTranslated) {
+            // 只要有翻譯（非 null 且非空字串）就顯示
+            if (displayTranslated != null && displayTranslated !== '') {
                 const translatedEl = document.createElement('div');
                 translatedEl.className = 'text_grid_item_translated';
                 translatedEl.textContent = displayTranslated;
-                translatedEl.style.fontSize = '11px';
-                translatedEl.style.color = 'var(--p-text-muted-color, rgba(255,255,255,0.7))';
-                translatedEl.style.wordBreak = 'break-word';
                 textContainer.appendChild(translatedEl);
             }
 
@@ -475,7 +451,6 @@ class TextGridManager {
                 gridItem.dataset.disabled = isDisabled ? 'false' : 'true';
                 this._updateItemDisabledState(gridItem, !isDisabled);
                 if (widget && widget.inputEl) {
-                    // 停用/啟用要影響上方文字：只寫入啟用項目，並跳過下一次 input 觸發的重繪，避免該 item 從 grid 消失
                     widget._skipNextGridRenderFromInput = true;
                     this._updateInputFromGrid(gridContainer, widget);
                 }
@@ -483,12 +458,16 @@ class TextGridManager {
             gridItem.addEventListener('mouseenter', () => {
                 if (gridItem.classList.contains('sortable-ghost') || gridItem.classList.contains('sortable-chosen') || gridItem.classList.contains('sortable-drag') || gridItem.dataset.disabled === 'true') return;
                 gridItem.style.backgroundColor = 'color-mix(in srgb, var(--p-primary-500), transparent 84%)';
-                gridItem.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                gridItem.style.borderColor = 'var(--p-content-border-color)';
             });
             gridItem.addEventListener('mouseleave', () => {
-                if (gridItem.dataset.disabled === 'true') gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 30%)';
-                else gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%)';
-                gridItem.style.borderColor = 'transparent';
+                if (gridItem.dataset.disabled === 'true') {
+                    gridItem.style.backgroundColor = 'color-mix(in srgb, var(--p-content-background), transparent 30%)';
+                    gridItem.style.borderColor = 'var(--p-content-border-color)';
+                } else {
+                    gridItem.style.backgroundColor = '';
+                    gridItem.style.borderColor = '';
+                }
             });
 
             return gridItem;

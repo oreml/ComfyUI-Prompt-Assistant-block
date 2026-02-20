@@ -1074,6 +1074,15 @@
     margin-top: 4px;
 }
 
+/* 內嵌 grid 容器：與 translate_word_cache_grid 一致，緊湊排列 */
+.clip-prompt-block-grid-wrapper .text_grid_container.text_grid_inline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    padding: 4px;
+    min-height: 0;
+}
+
 .text_grid_container.text_grid_inline {
     min-height: 0;
 }
@@ -1085,28 +1094,61 @@
     padding: 8px;
 }
 
+/* grid item 樣式與 .popup_tab_content.active 一致：使用相同 content 背景與邊框變數 */
 .text_grid_item {
     padding: 12px;
-    background-color: color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%);
+    background-color: var(--p-content-background);
+    border: 1px solid var(--p-content-border-color);
     border-radius: 8px;
-    cursor: grab; /* 改為 grab，表示可拖動 */
+    cursor: grab;
     transition: all 0.2s ease;
     text-align: center;
     user-select: none;
-    border: 1px solid transparent;
     min-height: 60px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
 }
 
+/* 內嵌 grid item：與 translate_word_cache_item 一致，緊湊顯示 */
+.clip-prompt-block-grid-wrapper .text_grid_item {
+    display: inline-flex;
+    margin: 4px;
+    padding: 4px 10px;
+    min-height: auto;
+    border-radius: 12px;
+    border: 1px solid var(--p-content-border-color);
+    background-color: color-mix(in srgb, var(--p-content-background), transparent 10%);
+}
+
+.clip-prompt-block-grid-wrapper .text_grid_item:hover {
+    background-color: color-mix(in srgb, var(--p-primary-500), transparent 84%);
+    border-color: var(--p-content-border-color);
+    transform: none;
+    box-shadow: none;
+}
+
+.clip-prompt-block-grid-wrapper .text_grid_item_text_container {
+    gap: 2px;
+}
+
+.clip-prompt-block-grid-wrapper .text_grid_item_original {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.clip-prompt-block-grid-wrapper .text_grid_item_translated {
+    font-size: 11px;
+}
+
 .text_grid_item:active {
-    cursor: grabbing; /* 拖動時改為 grabbing */
+    cursor: grabbing;
 }
 
 .text_grid_item:hover {
     background-color: color-mix(in srgb, var(--p-primary-500), transparent 84%);
-    border-color: rgba(255, 255, 255, 0.2);
+    border-color: var(--p-content-border-color);
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
@@ -1142,8 +1184,13 @@
 }
 
 .text_grid_item_disabled:hover {
-    background-color: color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 30%) !important;
+    background-color: color-mix(in srgb, var(--p-content-background), transparent 30%) !important;
+    border-color: var(--p-content-border-color) !important;
     transform: none !important;
+}
+
+.clip-prompt-block-grid-wrapper .text_grid_item_disabled:hover {
+    border-color: var(--p-content-border-color) !important;
 }
 
 /* 禁用的項目不可拖動 */
