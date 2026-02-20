@@ -3211,34 +3211,31 @@ class PromptAssistant {
                 text = text.trim();
                 
                 if (text && text.length > 0 && text.length <= 100) {
-                    const exists = items.some(item => item.text === text || item.value === text);
-                    if (!exists) {
-                        // 從單字映射中查找翻譯（優先），若無則查詢完整緩存
-                        let translated = wordCacheMap.get(text) || null;
-                        let original = null;
-                        
-                        if (!translated) {
-                            try {
-                                const cacheResult = TranslateCacheService.queryTranslateCache(text);
-                                if (cacheResult) {
-                                    if (cacheResult.type === 'source' && cacheResult.translatedText) {
-                                        translated = cacheResult.translatedText;
-                                    } else if (cacheResult.type === 'translated' && cacheResult.sourceText) {
-                                        original = cacheResult.sourceText;
-                                    }
+                    // 從單字映射中查找翻譯（優先），若無則查詢完整緩存
+                    let translated = wordCacheMap.get(text) || null;
+                    let original = null;
+                    
+                    if (!translated) {
+                        try {
+                            const cacheResult = TranslateCacheService.queryTranslateCache(text);
+                            if (cacheResult) {
+                                if (cacheResult.type === 'source' && cacheResult.translatedText) {
+                                    translated = cacheResult.translatedText;
+                                } else if (cacheResult.type === 'translated' && cacheResult.sourceText) {
+                                    original = cacheResult.sourceText;
                                 }
-                            } catch (err) {
-                                logger.error(`[Grid] 查詢翻譯緩存失敗 | text: ${text} | error: ${err.message}`);
                             }
+                        } catch (err) {
+                            logger.error(`[Grid] 查詢翻譯緩存失敗 | text: ${text} | error: ${err.message}`);
                         }
-                        
-                        items.push({
-                            text: text,
-                            value: text,
-                            translated: translated != null && translated !== '' ? translated : undefined,
-                            original: original != null && original !== '' ? original : undefined
-                        });
                     }
+                    
+                    items.push({
+                        text: text,
+                        value: text,
+                        translated: translated != null && translated !== '' ? translated : undefined,
+                        original: original != null && original !== '' ? original : undefined
+                    });
                 }
             });
         });
