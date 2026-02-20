@@ -892,14 +892,14 @@ export function registerSettings() {
                     }
                 },
 
-                // 翻译格式化选项
+                // 翻譯格式化選項
                 {
                     id: "PromptAssistant.Features.TranslateFormatPunctuation",
-                    name: "始终使用半角标点符号",
+                    name: "始終使用半角標點符號",
                     category: ["✨提示詞小助手", " 翻譯功能設置", "标点处理"],
                     type: "boolean",
                     defaultValue: false,
-                    tooltip: "打开后，翻译结果会自动将中文标点符号替换成英文标点符号",
+                    tooltip: "開啟後，翻譯結果會自動將中文標點符號替換成英文標點符號",
                     onChange: (value) => {
                         FEATURES.translateFormatPunctuation = value;
                         logger.log(`標點符號轉換 - 已${value ? "啟用" : "禁用"}`);
@@ -907,8 +907,8 @@ export function registerSettings() {
                 },
                 {
                     id: "PromptAssistant.Features.TranslateFormatSpace",
-                    name: "自动移除多余空格",
-                    category: ["✨提示詞小助手", " 翻譯功能設置", "空格处理"],
+                    name: "自動移除多餘空格",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "空格處理"],
                     type: "boolean",
                     defaultValue: false,
                     tooltip: "開啟後，翻譯結果會自動移除多餘空格",
@@ -919,11 +919,11 @@ export function registerSettings() {
                 },
                 {
                     id: "PromptAssistant.Features.TranslateFormatDots",
-                    name: "移除多余连续点号",
-                    category: ["✨提示詞小助手", " 翻譯功能設置", "点号处理"],
+                    name: "移除多餘連續點號",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "點號處理"],
                     type: "boolean",
                     defaultValue: false,
-                    tooltip: "打开后，翻译结果会将多余的“......”统一为“...”",
+                    tooltip: "開啟後，翻譯結果會將多餘的“......”統一為“...”",
                     onChange: (value) => {
                         FEATURES.translateFormatDots = value;
                         logger.log(`處理連續點號 - 已${value ? "啟用" : "禁用"}`);
