@@ -413,9 +413,14 @@ class TextGridManager {
             gridItem.dataset.textValue = sourceValue;
             gridItem.dataset.disabled = 'false';
 
+            // 原文顯示：若有 original（當前輸入是譯文），顯示 original；否則顯示當前輸入 text
             const displayOriginal = item.original != null ? item.original : (item.text || item.value || `項目 ${index + 1}`);
-            // 顯示翻譯：若有 original（當前輸入是譯文），則顯示當前輸入作為翻譯；否則顯示緩存中的 translated
-            const displayTranslated = item.original != null ? item.text : (item.translated != null && item.translated !== '' ? item.translated : null);
+            // 翻譯顯示：
+            // - 若有 original（當前輸入是譯文），顯示當前輸入 text 作為翻譯
+            // - 否則，顯示緩存中的 translated（如果存在）
+            const displayTranslated = item.original != null 
+                ? item.text 
+                : (item.translated != null && item.translated !== '' ? item.translated : null);
 
             const textContainer = document.createElement('div');
             textContainer.className = 'text_grid_item_text_container';

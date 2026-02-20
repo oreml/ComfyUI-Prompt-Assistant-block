@@ -3170,51 +3170,68 @@ class PromptAssistant {
         const inputValue = widget.inputEl.value || '';
         
         if (!inputValue.trim()) {
-            // 如果輸入框為空，返回空數組
             return [];
         }
         
-        // 解析輸入框文字，提取詞組
-        // 支持多種分隔符：逗號、換行、多個空格等
-        const items = [];
+        // 建立單字到翻譯的映射（與翻譯標籤緩存一致）
+        const wordCacheMap = new Map();
+        try {
+            const cache = TranslateCacheService.getAllTranslateCache();
+            cache.forEach((translated, source) => {
+                const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                if (sourceWords.length === translatedWords.length && sourceWords.length > 0) {
+                    sourceWords.forEach((word, index) => {
+                        const translatedWord = translatedWords[index];
+                        if (word && translatedWord) {
+                            // 如果已有映射，保留較長的翻譯（更完整）
+                            if (!wordCacheMap.has(word) || wordCacheMap.get(word).length < translatedWord.length) {
+                                wordCacheMap.set(word, translatedWord);
+                            }
+                        }
+                    });
+                }
+            });
+        } catch (err) {
+            logger.error(`[Grid] 建立單字映射失敗 | error: ${err.message}`);
+        }
         
-        // 先按換行分割
+        const items = [];
         const lines = inputValue.split(/\r?\n/);
         
         lines.forEach(line => {
-            // 移除首尾空白
             const trimmedLine = line.trim();
             if (!trimmedLine) return;
             
-            // 按逗號分割（支持中英文逗號）
             const parts = trimmedLine.split(/[,，、]/);
             
             parts.forEach(part => {
-                // 移除首尾空白和括號
                 let text = part.trim();
-                
-                // 移除常見的括號和標記
                 text = text.replace(/^[\(（\[\【\{「『]+|[\)）\]\】\}」』]+$/g, '');
                 text = text.trim();
                 
-                // 如果文字不為空且長度合理，添加到列表
                 if (text && text.length > 0 && text.length <= 100) {
-                    // 檢查是否已存在（避免重複）
                     const exists = items.some(item => item.text === text || item.value === text);
                     if (!exists) {
-                        // 嘗試從翻譯緩存獲取翻譯
-                        let translated = null;
+                        // 從單字映射中查找翻譯（優先），若無則查詢完整緩存
+                        let translated = wordCacheMap.get(text) || null;
                         let original = null;
-                        try {
-                            const cacheResult = TranslateCacheService.queryTranslateCache(text);
-                            if (cacheResult && cacheResult.type === 'source' && cacheResult.translatedText) {
-                                translated = cacheResult.translatedText;
-                            } else if (cacheResult && cacheResult.type === 'translated' && cacheResult.sourceText) {
-                                original = cacheResult.sourceText; // 當前輸入是譯文，原文為 sourceText
+                        
+                        if (!translated) {
+                            try {
+                                const cacheResult = TranslateCacheService.queryTranslateCache(text);
+                                if (cacheResult) {
+                                    if (cacheResult.type === 'source' && cacheResult.translatedText) {
+                                        translated = cacheResult.translatedText;
+                                    } else if (cacheResult.type === 'translated' && cacheResult.sourceText) {
+                                        original = cacheResult.sourceText;
+                                    }
+                                }
+                            } catch (err) {
+                                logger.error(`[Grid] 查詢翻譯緩存失敗 | text: ${text} | error: ${err.message}`);
                             }
-                        } catch (err) {
-                            // 忽略緩存查詢錯誤
                         }
+                        
                         items.push({
                             text: text,
                             value: text,
