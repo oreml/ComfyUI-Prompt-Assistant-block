@@ -6,6 +6,21 @@
 import { logger } from './logger.js';
 import { APIService } from '../services/api.js';
 
+/** 生成請求 ID 用於前後端日誌關聯 */
+function _requestId() {
+    return `pa-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** 取調用棧前幾行（排除本模組內部）用於 log */
+function _callerStack(skip = 0) {
+    try {
+        const s = new Error().stack || '';
+        return s.split('\n').slice(2 + skip, 5 + skip).join(' <- ');
+    } catch {
+        return '?';
+    }
+}
+
 class ResourceManager {
     // 资源缓存
     static #iconCache = new Map();
@@ -435,16 +450,41 @@ class ResourceManager {
      * 保存用户选择的标签文件
      */
     static async setSelectedTagFile(filename) {
+        const reqId = _requestId();
+        const payload = { selected_file: (filename != null && filename !== undefined) ? String(filename) : '' };
+        const bodyStr = JSON.stringify(payload);
+        const bodyLen = bodyStr ? bodyStr.length : 0;
+        logger.log(`[setSelectedTagFile] 源頭調用 | reqId=${reqId} | filename=${String(filename)} | bodyLen=${bodyLen} | caller=${_callerStack()}`);
+
+        if (!bodyStr || bodyLen === 0) {
+            logger.warn(`[setSelectedTagFile] 跳過：body 為空 | reqId=${reqId}`);
+            return false;
+        }
+
         try {
-            const response = await fetch(APIService.getApiUrl('/config/tags_selection'), {
+            const url = APIService.getApiUrl('/config/tags_selection');
+            const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ selected_file: filename })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Request-ID': reqId
+                },
+                body: bodyStr
             });
-            const result = await response.json();
-            return result.success;
+            const text = await response.text();
+            if (!response.ok) {
+                logger.warn(`[setSelectedTagFile] 服務端 ${response.status} | reqId=${reqId} | body=${text.slice(0, 200)}`);
+            }
+            let result;
+            try {
+                result = text ? JSON.parse(text) : {};
+            } catch (parseErr) {
+                logger.error(`[setSelectedTagFile] 響應非 JSON | reqId=${reqId} | status=${response.status} | text=${text.slice(0, 200)} | parseErr=${parseErr.message}`);
+                return false;
+            }
+            return result.success === true;
         } catch (error) {
-            logger.error(`保存标签选择失败 | ${error.message}`);
+            logger.error(`[setSelectedTagFile] 請求異常 | reqId=${reqId} | ${error.message}`);
             return false;
         }
     }
@@ -476,13 +516,43 @@ class ResourceManager {
      * 保存CSV标签数据
      */
     static async saveTagsCsv(filename, data) {
+        const reqId = _requestId();
+        const payload = { data: data ?? {} };
+        const bodyStr = JSON.stringify(payload);
+        const bodyLen = bodyStr ? bodyStr.length : 0;
+        const dataKeys = payload.data && typeof payload.data === 'object' ? Object.keys(payload.data).length : 0;
+        logger.log(`[saveTagsCsv] 源頭調用 | reqId=${reqId} | filename=${String(filename)} | bodyLen=${bodyLen} | dataKeys=${dataKeys} | caller=${_callerStack()}`);
+
+        if (!filename || typeof filename !== 'string') {
+            logger.warn(`[saveTagsCsv] 跳過：文件名無效 | reqId=${reqId}`);
+            return false;
+        }
+        if (!bodyStr || bodyLen === 0) {
+            logger.warn(`[saveTagsCsv] 跳過：body 為空 | reqId=${reqId}`);
+            return false;
+        }
+
         try {
-            const response = await fetch(APIService.getApiUrl(`/config/tags_csv/${filename}`), {
+            const url = APIService.getApiUrl(`/config/tags_csv/${encodeURIComponent(filename)}`);
+            const response = await fetch(url, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Request-ID': reqId
+                },
+                body: bodyStr
             });
-            const result = await response.json();
+            const text = await response.text();
+            if (!response.ok) {
+                logger.warn(`[saveTagsCsv] 服務端 ${response.status} | reqId=${reqId} | body=${text.slice(0, 200)}`);
+            }
+            let result;
+            try {
+                result = text ? JSON.parse(text) : {};
+            } catch (parseErr) {
+                logger.error(`[saveTagsCsv] 響應非 JSON | reqId=${reqId} | status=${response.status} | text=${text.slice(0, 200)} | parseErr=${parseErr.message}`);
+                return false;
+            }
             if (result.success) {
                 logger.log(`CSV标签保存成功 | 文件:${filename}`);
                 return true;
@@ -490,7 +560,7 @@ class ResourceManager {
             logger.error(`保存CSV标签失败 | ${result.error}`);
             return false;
         } catch (error) {
-            logger.error(`保存CSV标签失败 | ${error.message}`);
+            logger.error(`[saveTagsCsv] 請求異常 | reqId=${reqId} | ${error.message}`);
             return false;
         }
     }

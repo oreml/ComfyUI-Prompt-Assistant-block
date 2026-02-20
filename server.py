@@ -810,22 +810,59 @@ async def get_tags_csv(request):
 @PromptServer.instance.routes.post(f'{API_PREFIX}/config/tags_csv/{{filename}}')
 async def save_tags_csv(request):
     """保存标签数据到指定CSV文件"""
+    filename = request.match_info.get('filename')
+    req_id = request.headers.get("X-Request-ID", "")
+    content_type = request.headers.get("Content-Type", "")
+    print(f"{PREFIX} [save_tags_csv] 收到请求 | filename={filename!r} | X-Request-ID={req_id!r} | Content-Type={content_type!r}")
+
     try:
-        filename = request.match_info.get('filename')
         if not filename or not filename.endswith('.csv'):
+            print(f"{WARN_PREFIX} [save_tags_csv] 拒绝：无效文件名 | filename={filename!r}")
             return web.json_response({"success": False, "error": "无效的文件名"}, status=400)
-        
-        data = await request.json()
+
+        body_bytes = await request.read()
+        body_len = len(body_bytes)
+        body_preview = ""
+        if body_bytes:
+            try:
+                raw = body_bytes[:400].decode("utf-8", errors="replace")
+                body_preview = repr(raw) + ("..." if len(body_bytes) > 400 else "")
+            except Exception:
+                body_preview = "<decode_fail>"
+        print(f"{PREFIX} [save_tags_csv] 请求体 | body_len={body_len} | preview={body_preview}")
+
+        if not body_bytes:
+            if not req_id:
+                print(f"{PREFIX} [save_tags_csv] 非本擴展或舊緩存請求(空body)已忽略，建議強制刷新頁面 (Ctrl+Shift+R)")
+            else:
+                print(f"{WARN_PREFIX} [save_tags_csv] 请求体为空但有 X-Request-ID={req_id}，可能中途被清空 | 返回400")
+            return web.json_response({
+                "success": False,
+                "error": "请求体为空。若为本扩展，请强制刷新页面 (Ctrl+Shift+R) 后重试。"
+            }, status=400)
+
+        try:
+            data = json.loads(body_bytes.decode("utf-8"))
+        except json.JSONDecodeError as e:
+            print(f"{WARN_PREFIX} [save_tags_csv] JSON解析失败 | error={e!r} | body_preview={body_preview[:200]}")
+            return web.json_response({"success": False, "error": "请求体不是有效的JSON"}, status=400)
+
         tags_data = data.get('data', {})
-        
+        if not isinstance(tags_data, dict):
+            tags_data = {}
+        categories_count = len(tags_data) if isinstance(tags_data, dict) else 0
+        print(f"{PREFIX} [save_tags_csv] 解析成功 | 分类数={categories_count} | 将保存到 filename={filename!r}")
+
         success = config_manager.save_tags_csv(filename, tags_data)
         if success:
-            print(f"{PREFIX} CSV标签文件保存成功 | 文件:{filename}")
+            print(f"{PREFIX} [save_tags_csv] 保存成功 | 文件:{filename}")
             return web.json_response({"success": True})
         else:
+            print(f"{ERROR_PREFIX} [save_tags_csv] 保存失败（config_manager 返回 False）| 文件:{filename}")
             return web.json_response({"success": False, "error": "保存失败"}, status=500)
     except Exception as e:
-        print(f"{ERROR_PREFIX} 保存CSV标签文件失败 | 错误:{str(e)}")
+        print(f"{ERROR_PREFIX} [save_tags_csv] 异常 | type={type(e).__name__} | error={e!r}")
+        traceback.print_exc()
         return web.json_response({"success": False, "error": str(e)}, status=500)
 
 @PromptServer.instance.routes.get(f'{API_PREFIX}/config/tags_selection')
@@ -841,15 +878,39 @@ async def get_tags_selection(request):
 @PromptServer.instance.routes.post(f'{API_PREFIX}/config/tags_selection')
 async def save_tags_selection(request):
     """保存用户选择的标签文件"""
+    req_id = request.headers.get("X-Request-ID", "")
+    content_type = request.headers.get("Content-Type", "")
+    print(f"{PREFIX} [save_tags_selection] 收到请求 | X-Request-ID={req_id!r} | Content-Type={content_type!r}")
+
     try:
-        data = await request.json()
+        body_bytes = await request.read()
+        body_len = len(body_bytes)
+        body_preview = repr(body_bytes[:200].decode("utf-8", errors="replace")) if body_bytes else ""
+        print(f"{PREFIX} [save_tags_selection] 请求体 | body_len={body_len} | preview={body_preview}")
+
+        if not body_bytes:
+            if not req_id:
+                print(f"{PREFIX} [save_tags_selection] 非本擴展或舊緩存請求(空body)已忽略，建議強制刷新頁面 (Ctrl+Shift+R)")
+            else:
+                print(f"{WARN_PREFIX} [save_tags_selection] 请求体为空但有 X-Request-ID={req_id}")
+            return web.json_response({
+                "success": False,
+                "error": "请求体为空。若为本扩展，请强制刷新页面 (Ctrl+Shift+R) 后重试。"
+            }, status=400)
+        try:
+            data = json.loads(body_bytes.decode("utf-8"))
+        except json.JSONDecodeError as e:
+            print(f"{WARN_PREFIX} [save_tags_selection] JSON解析失败 | {e!r}")
+            return web.json_response({"success": False, "error": "请求体不是有效的JSON"}, status=400)
+
         success = config_manager.save_tags_selection(data)
         if success:
             return web.json_response({"success": True})
         else:
             return web.json_response({"success": False, "error": "保存失败"}, status=500)
     except Exception as e:
-        print(f"{ERROR_PREFIX} 保存标签选择失败 | 错误:{str(e)}")
+        print(f"{ERROR_PREFIX} [save_tags_selection] 异常 | {type(e).__name__}: {e!r}")
+        traceback.print_exc()
         return web.json_response({"success": False, "error": str(e)}, status=500)
 
 @PromptServer.instance.routes.get(f'{API_PREFIX}/config/favorites')
