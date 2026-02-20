@@ -130,6 +130,15 @@ class BaiduTranslateService:
         raise Exception("百度: 超过最大重试次数")
 
     @staticmethod
+    def _to_baidu_lang(code: str) -> str:
+        """將 zh-TW/zh-CN/zh 轉為百度 API 語言碼：zh（簡體）、cht（繁體）"""
+        if code == "zh-TW":
+            return "cht"
+        if code in ("zh-CN", "zh"):
+            return "zh"
+        return code
+
+    @staticmethod
     async def translate(text, from_lang='auto', to_lang='zh', request_id=None, is_auto=False, cancel_event=None, task_type=None, source=None):
         """
         异步调用百度翻译API进行翻译
@@ -143,6 +152,10 @@ class BaiduTranslateService:
             
             if not text or text.strip() == '':
                 return {"success": False, "error": "百度: 待翻译文本不能为空"}
+            
+            to_lang = BaiduTranslateService._to_baidu_lang(to_lang)
+            if from_lang and from_lang != "auto":
+                from_lang = BaiduTranslateService._to_baidu_lang(from_lang)
             
             from ..config_manager import config_manager
             config = config_manager.get_baidu_translate_config()

@@ -422,6 +422,97 @@ function createServiceSelector(type, label) {
     return row;
 }
 
+/**
+ * 創建「翻譯目標中文」選擇器（繁中 / 簡中）
+ * @returns {HTMLElement} 設置行
+ */
+function createTranslateTargetChineseSelector() {
+    const row = document.createElement("tr");
+    row.className = "promptwidget-settings-row";
+
+    const labelCell = document.createElement("td");
+    labelCell.className = "comfy-menu-label";
+    labelCell.textContent = "";
+    row.appendChild(labelCell);
+
+    const selectCell = document.createElement("td");
+    const container = document.createElement("div");
+    container.style.minWidth = "180px";
+    container.innerHTML = '<span style="color: var(--p-text-muted-color); font-size: 12px;">加載中...</span>';
+    selectCell.appendChild(container);
+    row.appendChild(selectCell);
+
+    const options = [
+        { value: "zh-TW", text: "繁體中文" },
+        { value: "zh-CN", text: "簡體中文" }
+    ];
+
+    const updateContent = async () => {
+        try {
+            const response = await fetch(APIService.getApiUrl("/config/translate"));
+            if (!response.ok) throw new Error("獲取配置失敗");
+            const config = await response.json();
+            const current = (config && config.target_chinese) || "zh-TW";
+
+            if (container.querySelector(".pa-dropdown")) {
+                const select = container.querySelector("select");
+                if (select) {
+                    select.value = current;
+                }
+                return;
+            }
+
+            container.innerHTML = "";
+            const res = createSelectGroup("", options, current, { showLabel: false });
+            const { group, select } = res;
+            while (group.firstChild) {
+                container.appendChild(group.firstChild);
+            }
+
+            select.addEventListener("change", async () => {
+                const value = select.value;
+                if (!value) return;
+                const dropdown = container.querySelector(".pa-dropdown");
+                if (dropdown) {
+                    dropdown.style.opacity = "0.6";
+                    dropdown.style.pointerEvents = "none";
+                }
+                try {
+                    const saveResp = await fetch(APIService.getApiUrl("/config/translate/target_chinese"), {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ target_chinese: value })
+                    });
+                    const data = saveResp.ok ? await saveResp.json() : {};
+                    if (data.success) {
+                        logger.log(`翻譯目標中文 | ${value === "zh-TW" ? "繁體" : "簡體"}`);
+                    } else {
+                        logger.error("保存翻譯目標失敗");
+                        const cfg = await (await fetch(APIService.getApiUrl("/config/translate"))).json();
+                        select.value = (cfg && cfg.target_chinese) || "zh-TW";
+                    }
+                } catch (err) {
+                    logger.error(`保存翻譯目標異常: ${err.message}`);
+                    const cfg = await (await fetch(APIService.getApiUrl("/config/translate"))).json();
+                    select.value = (cfg && cfg.target_chinese) || "zh-TW";
+                } finally {
+                    if (dropdown) {
+                        dropdown.style.opacity = "";
+                        dropdown.style.pointerEvents = "";
+                    }
+                }
+            });
+        } catch (err) {
+            logger.error(`載入翻譯目標選項失敗: ${err.message}`);
+            container.innerHTML = '<span style="color: var(--p-red-400); font-size: 12px;">載入失敗</span>';
+        }
+    };
+
+    updateContent();
+    window.addEventListener("pa-config-updated", updateContent);
+
+    return row;
+}
 
 /**
  * 注册设置选项
@@ -656,6 +747,14 @@ export function registerSettings() {
                     type: () => {
                         return createServiceSelector('translate', '翻译');
                     }
+                },
+                // 翻譯目標中文（繁中 / 簡中）
+                {
+                    id: "PromptAssistant.Translate.TargetChinese",
+                    name: "翻譯目標中文",
+                    category: ["✨提示词小助手", " 配置", "翻译"],
+                    tooltip: "英文翻譯為中文時使用繁體或簡體",
+                    type: () => createTranslateTargetChineseSelector()
                 },
 
                 // 提示词优化服务选择

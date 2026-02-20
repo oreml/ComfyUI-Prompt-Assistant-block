@@ -119,6 +119,21 @@ async def get_translate_config(request):
     config = config_manager.get_translate_config()
     return web.json_response(config)
 
+@PromptServer.instance.routes.post(f'{API_PREFIX}/config/translate/target_chinese')
+async def set_translate_target_chinese_api(request):
+    """設置翻譯目標中文：繁中(zh-TW) 或 簡中(zh-CN)"""
+    try:
+        data = await request.json()
+        target_chinese = data.get('target_chinese')
+        if target_chinese not in ('zh-TW', 'zh-CN'):
+            return web.json_response({"success": False, "error": "target_chinese 須為 zh-TW 或 zh-CN"}, status=400)
+        success = config_manager.set_translate_target_chinese(target_chinese)
+        if success:
+            return web.json_response({"success": True, "target_chinese": target_chinese})
+        return web.json_response({"success": False, "error": "保存失敗"}, status=500)
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
 # --- 方案A：API Key掩码接口（安全版本）---
 
 @PromptServer.instance.routes.get(f'{API_PREFIX}/config/llm/masked')
@@ -1178,12 +1193,15 @@ async def google_translate(request):
         text = data.get("text")
         from_lang = data.get("from", "auto")
         to_lang = data.get("to", "zh")
+        if to_lang == "zh":
+            translate_config = config_manager.get_translate_config()
+            to_lang = translate_config.get("target_chinese", "zh-TW")
         request_id = data.get("request_id")
         is_auto = data.get("is_auto", False)
         if not request_id:
             return web.json_response({"success": False, "error": "缺少request_id"}, status=400)
-        from_lang_name = {"auto": "自动", "zh": "中文", "en": "英文"}.get(from_lang, from_lang)
-        to_lang_name = {"zh": "中文", "en": "英文"}.get(to_lang, to_lang)
+        from_lang_name = {"auto": "自动", "zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(from_lang, from_lang)
+        to_lang_name = {"zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(to_lang, to_lang)
         log_prepare(TASK_TRANSLATE, request_id, SOURCE_FRONTEND, "Google 翻译", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
         task = asyncio.create_task(GoogleTranslateService.translate(text, from_lang, to_lang, request_id, is_auto, task_type=TASK_TRANSLATE, source=SOURCE_FRONTEND))
         ACTIVE_TASKS[request_id] = task
@@ -1213,6 +1231,9 @@ async def baidu_translate(request):
         text = data.get("text")
         from_lang = data.get("from", "auto")
         to_lang = data.get("to", "zh")
+        if to_lang == "zh":
+            translate_config = config_manager.get_translate_config()
+            to_lang = translate_config.get("target_chinese", "zh-TW")
         request_id = data.get("request_id")
         is_auto = data.get("is_auto", False)
 
@@ -1220,8 +1241,8 @@ async def baidu_translate(request):
             return web.json_response({"success": False, "error": "缺少request_id"}, status=400)
         
         # 准备阶段日志
-        from_lang_name = {"auto": "自动", "zh": "中文", "en": "英文"}.get(from_lang, from_lang)
-        to_lang_name = {"zh": "中文", "en": "英文"}.get(to_lang, to_lang)
+        from_lang_name = {"auto": "自动", "zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(from_lang, from_lang)
+        to_lang_name = {"zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(to_lang, to_lang)
         log_prepare(TASK_TRANSLATE, request_id, SOURCE_FRONTEND, "百度翻译", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
         
         # 创建并注册任务
@@ -1316,6 +1337,9 @@ async def llm_translate(request):
         text = data.get("text")
         from_lang = data.get("from", "auto")
         to_lang = data.get("to", "zh")
+        if to_lang == "zh":
+            _tc = config_manager.get_translate_config()
+            to_lang = _tc.get("target_chinese", "zh-TW")
         request_id = data.get("request_id")
         is_auto = data.get("is_auto", False)
         
@@ -1328,8 +1352,8 @@ async def llm_translate(request):
         from .services.openai_base import OpenAICompatibleService
         
         prefix = AUTO_TRANSLATE_REQUEST_PREFIX if is_auto else REQUEST_PREFIX
-        from_lang_name = {"auto": "自动检测", "zh": "中文", "en": "英文"}.get(from_lang, from_lang)
-        to_lang_name = {"zh": "中文", "en": "英文"}.get(to_lang, to_lang)
+        from_lang_name = {"auto": "自动检测", "zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(from_lang, from_lang)
+        to_lang_name = {"zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(to_lang, to_lang)
         
         # 使用独立的翻译配置
         translate_config = config_manager.get_translate_config()
@@ -1734,6 +1758,9 @@ async def llm_translate_stream(request):
         text = data.get("text")
         from_lang = data.get("from", "auto")
         to_lang = data.get("to", "zh")
+        if to_lang == "zh":
+            _tc = config_manager.get_translate_config()
+            to_lang = _tc.get("target_chinese", "zh-TW")
         request_id = data.get("request_id")
 
         if not request_id:

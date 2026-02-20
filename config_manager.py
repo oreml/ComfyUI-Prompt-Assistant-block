@@ -809,19 +809,26 @@ class ConfigManager:
             # 旧格式: "service_id"
             current_service_id = current_service_info
             current_model_name = None
+            target_chinese = 'zh-TW'
         elif isinstance(current_service_info, dict):
-            # 新格式: {"service": "service_id", "model": "model_name"}
+            # 新格式: {"service": "service_id", "model": "model_name", "target_chinese": "zh-TW"|"zh-CN"}
             current_service_id = current_service_info.get('service')
             current_model_name = current_service_info.get('model')
+            target_chinese = current_service_info.get('target_chinese', 'zh-TW')
         else:
             # 未设置，默认使用 Google 翻译
             current_service_id = 'google'
             current_model_name = None
+            target_chinese = 'zh-TW'
+        
+        def with_target_chinese(d):
+            d["target_chinese"] = target_chinese if target_chinese in ('zh-TW', 'zh-CN') else 'zh-TW'
+            return d
         
         # Google 翻译特殊处理（使用独立的 google_translate 配置）
         if current_service_id == 'google':
             google_config = self.get_google_translate_config()
-            return {
+            return with_target_chinese({
                 "provider": "google",
                 "model": "",
                 "base_url": "",
@@ -830,12 +837,12 @@ class ConfigManager:
                 "max_tokens": 1000,
                 "top_p": 0.9,
                 "providers": {}
-            }
+            })
         
         # 百度翻译特殊处理（使用独立的baidu_translate配置）
         if current_service_id == 'baidu':
             baidu_config = self.get_baidu_translate_config()
-            return {
+            return with_target_chinese({
                 "provider": "baidu",
                 "model": "",
                 "base_url": "",
@@ -845,14 +852,14 @@ class ConfigManager:
                 "max_tokens": 1000,
                 "top_p": 0.9,
                 "providers": {}
-            }
+            })
         
         # 查找对应的LLM服务
         service = self._get_service_by_id(current_service_id)
         if not service:
             # 服务不存在，回退到 Google 翻译
             google_config = self.get_google_translate_config()
-            return {
+            return with_target_chinese({
                 "provider": "google",
                 "model": "",
                 "base_url": "",
@@ -861,7 +868,7 @@ class ConfigManager:
                 "max_tokens": 1000,
                 "top_p": 0.9,
                 "providers": {}
-            }
+            })
         
         # 获取LLM模型列表
         llm_models = service.get('llm_models', [])
@@ -879,7 +886,7 @@ class ConfigManager:
         if not target_model:
             # 没有可用模型，回退到 Google 翻译
             google_config = self.get_google_translate_config()
-            return {
+            return with_target_chinese({
                 "provider": "google",
                 "model": "",
                 "base_url": "",
@@ -888,11 +895,11 @@ class ConfigManager:
                 "max_tokens": 1000,
                 "top_p": 0.9,
                 "providers": {}
-            }
+            })
         
         # 返回LLM翻译配置
         api_key = service.get('api_key', '')
-        return {
+        return with_target_chinese({
             "provider": service.get('id', ''),
             "model": target_model.get('name', ''),
             "base_url": service.get('base_url', ''),
@@ -902,7 +909,7 @@ class ConfigManager:
             "top_p": target_model.get('top_p', 0.9),
             "auto_unload": service.get('auto_unload', True) if service.get('type') == 'ollama' else None,
             "providers": {}
-        }
+        })
 
     def get_settings(self):
         """获取ComfyUI用户设置（从设置文件读取）"""
@@ -968,8 +975,24 @@ class ConfigManager:
 
         return self.save_config(config)
 
-
-
+    def set_translate_target_chinese(self, target_chinese: str) -> bool:
+        """設置翻譯目標中文：zh-TW（繁中）或 zh-CN（簡中）"""
+        if target_chinese not in ('zh-TW', 'zh-CN'):
+            return False
+        config = self.load_config()
+        if 'current_services' not in config:
+            config['current_services'] = {}
+        current = config['current_services'].get('translate')
+        if isinstance(current, dict):
+            config['current_services']['translate'] = {**current, 'target_chinese': target_chinese}
+        else:
+            service_id = current if isinstance(current, str) else 'google'
+            config['current_services']['translate'] = {
+                "service": service_id,
+                "model": "",
+                "target_chinese": target_chinese
+            }
+        return self.save_config(config)
 
     # --- 注意：validate_and_fix_system_prompts 已迁移到 migration_tool.py ---
     # 系统提示词的验证和补全由 migration_tool 的增量更新逻辑统一处理
@@ -1578,7 +1601,9 @@ class ConfigManager:
                     config['google_translate'] = {"api_key": ""}
                 if 'current_services' not in config:
                     config['current_services'] = {}
-                config['current_services'][service_type] = {"service": "google", "model": ""}
+                prev = config['current_services'].get(service_type)
+                prev_chinese = prev.get('target_chinese', 'zh-TW') if isinstance(prev, dict) else 'zh-TW'
+                config['current_services'][service_type] = {"service": "google", "model": "", "target_chinese": prev_chinese}
                 if self.save_config(config):
                     self._log(f"当前服务商已切换: Google 翻译 ({service_type})")
                     return True
@@ -1600,10 +1625,13 @@ class ConfigManager:
                 if 'current_services' not in config:
                     config['current_services'] = {}
                 
-                # 设置百度为当前服务(无模型概念)
+                # 设置百度为当前服务(无模型概念)，保留翻譯目標中文
+                prev = config['current_services'].get(service_type)
+                prev_chinese = prev.get('target_chinese', 'zh-TW') if isinstance(prev, dict) else 'zh-TW'
                 config['current_services'][service_type] = {
                     "service": "baidu",
-                    "model": ""
+                    "model": "",
+                    "target_chinese": prev_chinese
                 }
                 
                 # 保存配置
@@ -1638,42 +1666,45 @@ class ConfigManager:
             if 'current_services' not in config:
                 config['current_services'] = {}
             
-            # 获取当前服务信息(兼容旧格式)
+            # 获取当前服务信息(兼容旧格式)，翻譯類型保留 target_chinese
             current_info = config['current_services'].get(service_type)
+            prev_chinese = 'zh-TW'
+            if service_type == 'translate' and isinstance(current_info, dict):
+                prev_chinese = current_info.get('target_chinese', 'zh-TW')
             
             # 设置新格式的current_services
             if model_name:
                 # 明确指定了模型
-                config['current_services'][service_type] = {
-                    "service": service_id,
-                    "model": model_name
-                }
+                base = {"service": service_id, "model": model_name}
+                if service_type == 'translate':
+                    base["target_chinese"] = prev_chinese
+                config['current_services'][service_type] = base
             else:
                 # 未指定模型,使用默认模型或第一个模型
                 model_list = service.get(model_list_key, [])
                 
                 # 如果是百度服务,没有模型
                 if service.get('id') == 'baidu' or service.get('type') == 'baidu':
-                    config['current_services'][service_type] = {
-                        "service": service_id,
-                        "model": ""
-                    }
+                    base = {"service": service_id, "model": ""}
+                    if service_type == 'translate':
+                        base["target_chinese"] = prev_chinese
+                    config['current_services'][service_type] = base
                 else:
                     # 查找默认模型或第一个模型
                     default_model = next((m for m in model_list if m.get('is_default')), 
                                         model_list[0] if model_list else None)
                     
                     if default_model:
-                        config['current_services'][service_type] = {
-                            "service": service_id,
-                            "model": default_model.get('name', '')
-                        }
+                        base = {"service": service_id, "model": default_model.get('name', '')}
+                        if service_type == 'translate':
+                            base["target_chinese"] = prev_chinese
+                        config['current_services'][service_type] = base
                     else:
                         # 没有模型,只设置服务
-                        config['current_services'][service_type] = {
-                            "service": service_id,
-                            "model": ""
-                        }
+                        base = {"service": service_id, "model": ""}
+                        if service_type == 'translate':
+                            base["target_chinese"] = prev_chinese
+                        config['current_services'][service_type] = base
             
             # 保存配置
             if self.save_config(config):

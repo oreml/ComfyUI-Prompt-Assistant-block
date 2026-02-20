@@ -548,8 +548,10 @@ class LLMService(OpenAICompatibleService):
             thinking_disabled = _thinking_extra is not None and disable_thinking_enabled
             model_display = format_model_with_thinking(model, thinking_disabled)
 
-            # 翻译提示词
-            translate_instruction = f"请将以下文本从{from_lang}翻译成{to_lang}，只输出翻译结果，不要添加任何解释或额外内容："
+            # 翻译提示词：目標語言顯示為繁中/簡中
+            to_lang_display = {"zh-TW": "繁体中文", "zh-CN": "简体中文"}.get(to_lang, to_lang)
+            from_lang_display = {"zh-TW": "繁体中文", "zh-CN": "简体中文", "zh": "中文", "en": "英文", "auto": "自动检测"}.get(from_lang, from_lang)
+            translate_instruction = f"请将以下文本从{from_lang_display}翻译成{to_lang_display}，只输出翻译结果，不要添加任何解释或额外内容："
             
             messages = [
                 {"role": "system", "content": translate_instruction},

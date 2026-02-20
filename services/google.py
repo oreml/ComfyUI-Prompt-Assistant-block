@@ -20,8 +20,10 @@ except ImportError:
     Translator = None
 
 
-# Google 目標語言碼與本專案一致：zh / en；API 使用 zh-CN 表示簡體中文
+# Google 目標語言碼：zh-TW（繁中）、zh-CN（簡中）、zh 預設簡中、en
 def _to_google_lang(code: str) -> str:
+    if code in ("zh-TW", "zh-CN"):
+        return code
     if code == "zh":
         return "zh-CN"
     if code == "en":
@@ -141,14 +143,16 @@ class GoogleTranslateService:
             }
 
         try:
-            # googletrans 語言碼映射
+            # googletrans 語言碼映射（小寫）
             lang_map = {
                 "zh": "zh-cn",
+                "zh-CN": "zh-cn",
+                "zh-TW": "zh-tw",
                 "en": "en",
                 "auto": "auto"
             }
-            src_lang = lang_map.get(from_lang, from_lang) if from_lang != "auto" else "auto"
-            dest_lang = lang_map.get(to_lang, to_lang)
+            src_lang = lang_map.get(from_lang, from_lang.lower() if from_lang else "auto") if from_lang != "auto" else "auto"
+            dest_lang = lang_map.get(to_lang, to_lang.lower() if to_lang else "zh-cn")
 
             # 分段處理長文本（googletrans 單次請求限制約 5000 字符）
             chunks = GoogleTranslateService.split_text_by_paragraphs(text, max_length=4500)
