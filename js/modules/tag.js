@@ -4421,7 +4421,8 @@ class TagManager {
                 const content = tabContents.querySelector(`.popup_tab_content[data-category="${contentId}"]`);
                 if (content) {
                     content.classList.add('active');
-                    content.style.display = 'block';
+                    // 使用 CSS 的 display:flex（.popup_tab_content.active），避免 inline 覆蓋導致佈局異常
+                    content.style.removeProperty('display');
 
                     // 记忆当前选择的标签页
                     TagManager.setLastActiveTab(contentId);
@@ -4432,12 +4433,33 @@ class TagManager {
                     } else if (contentId === '已插入') {
                         this._loadInsertedTagsContent(content);
                     } else if (contentId === '翻譯單字緩存') {
-                        // 清理之前的事件監聽器
+                        // 先顯示載入中，避免空幀；等父容器有高度（layout sync）後再建 DOM；並至少顯示 loading 一段時間再載入
                         if (content._translateWordCacheCleanup) {
                             content._translateWordCacheCleanup.forEach(cleanup => cleanup());
                             content._translateWordCacheCleanup = [];
                         }
-                        this._loadTranslateWordCacheContent(content, nodeId, inputId);
+                        content.innerHTML = '<div class="tag_empty_state" style="justify-content:center;padding:24px;"><span class="pi pi-spin pi-spinner" style="font-size:20px;margin-right:8px;"></span><span>載入中...</span></div>';
+                        content.setAttribute('data-loaded', 'false');
+                        const loadingMinMs = 200;
+                        const loadingStart = Date.now();
+                        const doLoad = () => {
+                            const elapsed = Date.now() - loadingStart;
+                            if (elapsed >= loadingMinMs) {
+                                this._loadTranslateWordCacheContent(content, nodeId, inputId);
+                            } else {
+                                setTimeout(doLoad, loadingMinMs - elapsed);
+                            }
+                        };
+                        const tryLoad = (attempt = 0) => {
+                            const parent = content.parentElement;
+                            const hasHeight = (parent && parent.clientHeight > 0) || content.clientHeight > 0;
+                            if (hasHeight || attempt >= 60) {
+                                doLoad();
+                                return;
+                            }
+                            requestAnimationFrame(() => tryLoad(attempt + 1));
+                        };
+                        setTimeout(() => requestAnimationFrame(() => tryLoad(0)), 0);
                     }
                     // 对于普通标签页，仅在首次加载
                     else if (content.getAttribute('data-loaded') !== 'true') {
@@ -4477,18 +4499,16 @@ class TagManager {
 
             tabs.appendChild(tab);
 
-            // 创建内容区域
+            // 创建内容区域（顯示由 CSS .popup_tab_content.active 的 display:flex 控制，不設 inline display）
             const content = document.createElement('div');
             content.className = 'popup_tab_content';
             content.setAttribute('data-category', category);
-            content.setAttribute('data-loaded', 'false'); // 标记为未加载
+            content.setAttribute('data-loaded', 'false');
             content.style.flex = '1';
-            content.style.display = 'none';
 
             // 第一个内容默认显示
             if (index === activeTabIndex) {
                 content.classList.add('active');
-                content.style.display = 'block';
             }
 
             tabContents.appendChild(content);
@@ -4580,7 +4600,7 @@ class TagManager {
             }
         }, 50);
 
-        // 加载第一个激活的标签页内容
+        // 加载第一个激活的标签页内容（與點擊 Tab 時邏輯一致；若預設為翻譯單字緩存也需顯示 loading 並載入）
         const firstContent = tabContents.querySelector('.popup_tab_content.active');
         if (firstContent) {
             const firstCategory = firstContent.getAttribute('data-category');
@@ -4590,6 +4610,33 @@ class TagManager {
                 this._loadCategoryContent(firstContent, userTagData, 'favorites');
             } else if (firstCategory === '已插入') {
                 this._loadInsertedTagsContent(firstContent);
+            } else if (firstCategory === '翻譯單字緩存') {
+                if (firstContent._translateWordCacheCleanup) {
+                    firstContent._translateWordCacheCleanup.forEach(cleanup => cleanup());
+                    firstContent._translateWordCacheCleanup = [];
+                }
+                firstContent.innerHTML = '<div class="tag_empty_state" style="justify-content:center;padding:24px;"><span class="pi pi-spin pi-spinner" style="font-size:20px;margin-right:8px;"></span><span>載入中...</span></div>';
+                firstContent.setAttribute('data-loaded', 'false');
+                const loadingMinMs = 200;
+                const loadingStart = Date.now();
+                const doLoad = () => {
+                    const elapsed = Date.now() - loadingStart;
+                    if (elapsed >= loadingMinMs) {
+                        this._loadTranslateWordCacheContent(firstContent, nodeId, inputId);
+                    } else {
+                        setTimeout(doLoad, loadingMinMs - elapsed);
+                    }
+                };
+                const tryLoad = (attempt = 0) => {
+                    const parent = firstContent.parentElement;
+                    const hasHeight = (parent && parent.clientHeight > 0) || firstContent.clientHeight > 0;
+                    if (hasHeight || attempt >= 60) {
+                        doLoad();
+                        return;
+                    }
+                    requestAnimationFrame(() => tryLoad(attempt + 1));
+                };
+                setTimeout(() => requestAnimationFrame(() => tryLoad(0)), 0);
             } else {
                 this._loadCategoryContent(firstContent, tagData[firstCategory], firstCategory);
             }
@@ -5838,11 +5885,20 @@ class TagManager {
         content.innerHTML = '';
         content.setAttribute('data-loaded', 'true');
 
+        // 成因 C：翻譯單字緩存不經 opacity:0 階段，直接顯示，避免 wrapper transition 導致空白
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'tag_content_wrapper translate_word_cache_wrapper';
+        contentWrapper.style.display = 'flex';
+        contentWrapper.style.flexDirection = 'column';
+        contentWrapper.style.flex = '1';
+        contentWrapper.style.minHeight = '0';
+        contentWrapper.style.opacity = '1';
+        contentWrapper.style.transform = 'none';
+
         // 获取所有单字缓存
         const wordCache = this._getWordCacheFromTranslateCache();
         
         if (wordCache.size === 0) {
-            // 显示空状态
             const emptyState = document.createElement('div');
             emptyState.className = 'tag_empty_state';
             emptyState.innerHTML = `
@@ -5850,7 +5906,12 @@ class TagManager {
                 <div class="empty_text">暫無翻譯單字緩存</div>
                 <div class="empty_hint">翻譯緩存中的單字會自動提取到這裡</div>
             `;
-            content.appendChild(emptyState);
+            contentWrapper.appendChild(emptyState);
+            content.appendChild(contentWrapper);
+            requestAnimationFrame(() => {
+                void content.offsetHeight;
+                void contentWrapper.offsetHeight;
+            });
             return;
         }
 
@@ -5865,41 +5926,45 @@ class TagManager {
             this._filterTranslateWordCache(e.target.value, content, nodeId, inputId);
         });
         searchContainer.appendChild(searchInput);
-        content.appendChild(searchContainer);
+        contentWrapper.appendChild(searchContainer);
 
         // 创建统计信息
         const statsDiv = document.createElement('div');
         statsDiv.className = 'translate_cache_stats';
         statsDiv.textContent = `共 ${wordCache.size} 個單字`;
-        content.appendChild(statsDiv);
+        contentWrapper.appendChild(statsDiv);
 
         // 创建缓存列表容器（使用 grid 佈局）
         const listContainer = document.createElement('div');
         listContainer.className = 'translate_cache_list translate_word_cache_grid';
-        content.appendChild(listContainer);
+        contentWrapper.appendChild(listContainer);
 
         // 渲染单字缓存列表
         this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
+
+        content.appendChild(contentWrapper);
+        // 成因 A/D：載入完成後強制 reflow，確保瀏覽器對該樹做 layout/paint
+        requestAnimationFrame(() => {
+            void content.offsetHeight;
+            void contentWrapper.offsetHeight;
+        });
         
         // 添加輸入框事件監聽器，當輸入框內容變化時自動更新 grid item 狀態
         const mapping = UIToolkit._findMapping(nodeId, inputId);
         if (mapping && mapping.inputEl) {
             const inputEl = mapping.inputEl;
             
-            // 創建更新函數
             const updateGridState = () => {
                 const wordCache = this._getWordCacheFromTranslateCache();
                 this._renderTranslateWordCacheList(wordCache, listContainer, nodeId, inputId);
             };
             
-            // 添加輸入事件監聽器
             const inputListener = () => {
                 updateGridState();
             };
             
             inputEl.addEventListener('input', inputListener);
             
-            // 保存清理函數，以便在標籤頁切換時清理
             if (!content._translateWordCacheCleanup) {
                 content._translateWordCacheCleanup = [];
             }

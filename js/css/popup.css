@@ -801,6 +801,11 @@
     flex-direction: column;
 }
 
+/* 成因 B：翻譯單字緩存 Tab 保證最小高度，避免父鏈未穩定時 content 高度為 0 導致一片空白 */
+.popup_container .popup_tab_content[data-category="翻譯單字緩存"].active {
+    min-height: 200px;
+}
+
 /* 滚动指示器 - 漂浮设计 */
 .popup_container .tabs_scroll_indicator {
     position: absolute;
@@ -1489,6 +1494,13 @@
 /* ---添加分类按钮样式--- */
 
 /* ====================== 翻譯緩存標籤頁樣式 ====================== */
+
+/* 成因 C：翻譯單字緩存 wrapper 直接顯示，不經 opacity:0 與 transition，避免空白 */
+.tag_content_wrapper.translate_word_cache_wrapper {
+    opacity: 1;
+    transform: none;
+    transition: none;
+}
 
 /* 翻譯緩存搜索容器 */
 .translate_cache_search_container {
