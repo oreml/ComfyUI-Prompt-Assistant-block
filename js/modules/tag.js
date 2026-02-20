@@ -5795,8 +5795,13 @@ class TagManager {
      */
     static _handleDeleteWordCache(word, nodeId, inputId, container) {
         createConfirmPopup({
-            title: '確認刪除',
+            target: container || document.body,
             message: `確定要刪除單字「${word}」及其翻譯嗎？`,
+            icon: 'pi-exclamation-triangle',
+            iconColor: 'var(--p-red-500)',
+            confirmLabel: '刪除',
+            cancelLabel: '取消',
+            confirmDanger: true,
             onConfirm: () => {
                 // 從翻譯緩存中移除包含這個單字的所有條目
                 const cache = TranslateCacheService.getAllTranslateCache();
@@ -5851,8 +5856,13 @@ class TagManager {
      */
     static _deleteTranslateCacheItem(source, container, nodeId, inputId) {
         createConfirmPopup({
-            title: '確認刪除',
+            target: container || document.body,
             message: `確定要刪除這條翻譯緩存嗎？`,
+            icon: 'pi-exclamation-triangle',
+            iconColor: 'var(--p-red-500)',
+            confirmLabel: '刪除',
+            cancelLabel: '取消',
+            confirmDanger: true,
             onConfirm: () => {
                 TranslateCacheService.deleteTranslateCacheEntries([source]);
                 const cache = TranslateCacheService.getAllTranslateCache();
