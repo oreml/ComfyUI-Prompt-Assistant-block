@@ -1063,6 +1063,16 @@
     padding: 12px;
 }
 
+/* CLIPTextEncodePromptBlock 內嵌 grid 外層 */
+.clip-prompt-block-grid-wrapper {
+    width: 100%;
+    margin-top: 4px;
+}
+
+.text_grid_container.text_grid_inline {
+    min-height: 0;
+}
+
 .text_grid_container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));

@@ -109,7 +109,8 @@ class UIToolkit {
             'PreviewAny',       // Preview as Text节点（实际类型）
             'PreviewTextNode',  // Preview节点可能的其他名称
             'Show any [Crystools]',
-            'CLIPTextEncode',   // 显式包含 CLIP 相关
+            'CLIPTextEncode',   // 顯式包含 CLIP 相關
+            'CLIPTextEncodePromptBlock', // 本擴展的 CLIP Text Encode (Prompt) Block
             'CLIPTextEncodeSDXL',
             // 添加其他支持的节点类型
         ];

@@ -2809,6 +2809,30 @@ class PromptAssistant {
             requestAnimationFrame(() => this._adjustPositionForScrollbar(widget, textarea, true));
             setTimeout(() => this._adjustPositionForScrollbar(widget, textarea, true), 150);
         }
+
+        this._setupInlineTextGridIfNeeded(widget, container);
+    }
+
+    /**
+     * 若為 CLIPTextEncodePromptBlock 節點，在輸入文字下方插入可拖動 grid
+     */
+    _setupInlineTextGridIfNeeded(widget, container) {
+        const nodeType = widget.node?.type || widget.nodeInfo?.nodeType || '';
+        if (nodeType !== 'CLIPTextEncodePromptBlock' || !container || !widget.inputEl) return;
+        if (container.querySelector('.clip-prompt-block-grid-wrapper') || widget._inlineTextGridDestroy) return;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'clip-prompt-block-grid-wrapper';
+        container.appendChild(wrapper);
+
+        TextGridManager.createInlineTextGrid({
+            container: wrapper,
+            widget,
+            getTextItems: () => this._getTextGridItems(widget)
+        }).then(({ destroy }) => {
+            widget._inlineTextGridDestroy = destroy;
+            if (widget._eventCleanupFunctions) widget._eventCleanupFunctions.push(destroy);
+        });
     }
 
     /**
@@ -2957,6 +2981,8 @@ class PromptAssistant {
         if (inputEl) {
             requestAnimationFrame(() => this._adjustPositionForScrollbar(widget, inputEl, true));
         }
+
+        this._setupInlineTextGridIfNeeded(widget, domWidgetContainer);
     }
 
     /**
@@ -3013,6 +3039,12 @@ class PromptAssistant {
                     }
                 });
                 instance._eventCleanupFunctions = [];
+            }
+
+            // 3.4 清理 CLIPTextEncodePromptBlock 內嵌 grid
+            if (instance._inlineTextGridDestroy && typeof instance._inlineTextGridDestroy === 'function') {
+                try { instance._inlineTextGridDestroy(); } catch (e) { /* ignore */ }
+                instance._inlineTextGridDestroy = null;
             }
 
             // 3.5【關鍵修復】重置 inputEl 上的事件绑定標記

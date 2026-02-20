@@ -387,6 +387,162 @@ class TextGridManager {
     }
 
     /**
+     * 在給定容器內建立內嵌可拖動 grid（僅用於 CLIPTextEncodePromptBlock 等節點）
+     * @param {Object} options
+     * @param {HTMLElement} options.container - 用於插入 grid 的容器（會在其內建立 .text_grid_container）
+     * @param {Object} options.widget - 帶有 inputEl 的 widget，用於同步文字
+     * @param {Function} options.getTextItems - () => Array<{text, value?, original?, translated?}> 取得當前解析的項目
+     * @returns {{ destroy: function }} 清理函數
+     */
+    static async createInlineTextGrid(options) {
+        const { container, widget, getTextItems } = options;
+        if (!container || !widget || !widget.inputEl || typeof getTextItems !== 'function') {
+            return { destroy: () => {} };
+        }
+
+        await this._initSortable();
+
+        const gridContainer = document.createElement('div');
+        gridContainer.className = 'text_grid_container text_grid_inline';
+        gridContainer.style.display = 'grid';
+        gridContainer.style.gridTemplateColumns = 'repeat(auto-fill, minmax(100px, 1fr))';
+        gridContainer.style.gap = '6px';
+        gridContainer.style.padding = '6px 0';
+        gridContainer.style.marginTop = '4px';
+        container.appendChild(gridContainer);
+
+        let sortableInstance = null;
+        let inputListenerRemoved = false;
+
+        const buildItemEl = (item, index) => {
+            const gridItem = document.createElement('div');
+            gridItem.className = 'text_grid_item';
+            gridItem.style.padding = '8px';
+            gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%)';
+            gridItem.style.borderRadius = '6px';
+            gridItem.style.cursor = 'grab';
+            gridItem.style.transition = 'all 0.2s ease';
+            gridItem.style.textAlign = 'center';
+            gridItem.style.userSelect = 'none';
+            gridItem.style.border = '1px solid transparent';
+            const sourceValue = item.original != null ? item.original : (item.value || item.text);
+            gridItem.dataset.textValue = sourceValue;
+            gridItem.dataset.disabled = 'false';
+
+            const displayOriginal = item.original != null ? item.original : (item.text || item.value || `項目 ${index + 1}`);
+            const displayTranslated = item.original != null ? item.text : (item.translated || null);
+
+            const textContainer = document.createElement('div');
+            textContainer.className = 'text_grid_item_text_container';
+            textContainer.style.display = 'flex';
+            textContainer.style.flexDirection = 'column';
+            textContainer.style.gap = '2px';
+            textContainer.style.width = '100%';
+            textContainer.style.alignItems = 'center';
+            textContainer.style.justifyContent = 'center';
+
+            const originalEl = document.createElement('div');
+            originalEl.className = 'text_grid_item_original';
+            originalEl.textContent = displayOriginal;
+            originalEl.style.fontSize = '12px';
+            originalEl.style.color = 'var(--p-inputtext-color)';
+            originalEl.style.wordBreak = 'break-word';
+            originalEl.style.fontWeight = '600';
+            textContainer.appendChild(originalEl);
+
+            if (displayTranslated) {
+                const translatedEl = document.createElement('div');
+                translatedEl.className = 'text_grid_item_translated';
+                translatedEl.textContent = displayTranslated;
+                translatedEl.style.fontSize = '11px';
+                translatedEl.style.color = 'var(--p-text-muted-color, rgba(255,255,255,0.7))';
+                translatedEl.style.wordBreak = 'break-word';
+                textContainer.appendChild(translatedEl);
+            }
+
+            gridItem.appendChild(textContainer);
+
+            let mouseDownTime = 0;
+            let mouseDownPos = { x: 0, y: 0 };
+            let hasMoved = false;
+            gridItem.addEventListener('mousedown', (e) => { mouseDownTime = Date.now(); mouseDownPos = { x: e.clientX, y: e.clientY }; hasMoved = false; });
+            gridItem.addEventListener('mousemove', (e) => {
+                if (mouseDownTime > 0 && (Math.abs(e.clientX - mouseDownPos.x) > 5 || Math.abs(e.clientY - mouseDownPos.y) > 5)) hasMoved = true;
+            });
+            gridItem.addEventListener('mouseup', () => { mouseDownTime = 0; hasMoved = false; });
+            gridItem.addEventListener('click', (e) => {
+                if (hasMoved || gridItem.classList.contains('sortable-chosen') || gridItem.classList.contains('sortable-drag')) return;
+                e.stopPropagation();
+                e.preventDefault();
+                const isDisabled = gridItem.dataset.disabled === 'true';
+                gridItem.dataset.disabled = isDisabled ? 'false' : 'true';
+                this._updateItemDisabledState(gridItem, !isDisabled);
+                if (widget && widget.inputEl) this._updateInputFromGrid(gridContainer, widget);
+            });
+            gridItem.addEventListener('mouseenter', () => {
+                if (gridItem.classList.contains('sortable-ghost') || gridItem.classList.contains('sortable-chosen') || gridItem.classList.contains('sortable-drag') || gridItem.dataset.disabled === 'true') return;
+                gridItem.style.backgroundColor = 'color-mix(in srgb, var(--p-primary-500), transparent 84%)';
+                gridItem.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+            });
+            gridItem.addEventListener('mouseleave', () => {
+                if (gridItem.dataset.disabled === 'true') gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 30%)';
+                else gridItem.style.backgroundColor = 'color-mix(in srgb, var(--comfy-menu-secondary-bg), transparent 10%)';
+                gridItem.style.borderColor = 'transparent';
+            });
+
+            return gridItem;
+        };
+
+        const render = () => {
+            if (sortableInstance) {
+                try { sortableInstance.destroy(); } catch (e) {}
+                sortableInstance = null;
+            }
+            gridContainer.innerHTML = '';
+            const items = getTextItems();
+            items.forEach((item, index) => gridContainer.appendChild(buildItemEl(item, index)));
+
+            if (this.Sortable && gridContainer.children.length > 0) {
+                sortableInstance = new this.Sortable(gridContainer, {
+                    animation: 120,
+                    ghostClass: 'sortable-ghost',
+                    chosenClass: 'sortable-chosen',
+                    dragClass: 'sortable-drag',
+                    draggable: '.text_grid_item:not(.text_grid_item_disabled)',
+                    filter: '.text_grid_item_disabled',
+                    preventOnFilter: true,
+                    onEnd: (evt) => {
+                        if (evt.oldIndex !== evt.newIndex && widget && widget.inputEl) this._updateInputFromGrid(gridContainer, widget);
+                    }
+                });
+            }
+        };
+
+        render();
+
+        let debounceTimer = null;
+        const onInput = () => {
+            if (inputListenerRemoved) return;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => render(), 400);
+        };
+        widget.inputEl.addEventListener('input', onInput);
+
+        const destroy = () => {
+            inputListenerRemoved = true;
+            if (debounceTimer) clearTimeout(debounceTimer);
+            widget.inputEl.removeEventListener('input', onInput);
+            if (sortableInstance) {
+                try { sortableInstance.destroy(); } catch (e) {}
+                sortableInstance = null;
+            }
+            if (gridContainer && gridContainer.parentElement) gridContainer.remove();
+        };
+
+        return { destroy };
+    }
+
+    /**
      * 隱藏文字 grid 彈窗
      */
     static hideTextGridPopup() {
