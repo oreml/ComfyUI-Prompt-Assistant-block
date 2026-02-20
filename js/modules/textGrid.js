@@ -353,33 +353,30 @@ class TextGridManager {
     }
 
     /**
-     * 根據 Grid 順序更新輸入框內容（排除禁用的項目）
+     * 根據 Grid 順序更新輸入框內容
+     * @param {HTMLElement} gridContainer
+     * @param {Object} widget
+     * @param {{ keepDisabledInInput?: boolean }} [opts] - 若為 true（內嵌 grid），原文保留所有項目（含停用），避免重繪時停用字消失
      */
-    static _updateInputFromGrid(gridContainer, widget) {
+    static _updateInputFromGrid(gridContainer, widget, opts = {}) {
         if (!gridContainer || !widget || !widget.inputEl) return;
 
-        // 獲取所有啟用的項目文字值（按當前順序，排除禁用的）
         const items = Array.from(gridContainer.querySelectorAll('.text_grid_item'));
+        const includeDisabled = opts.keepDisabledInInput === true;
         const textValues = items
-            .filter(item => item.dataset.disabled !== 'true') // 只包含未禁用的項目
+            .filter(item => includeDisabled || item.dataset.disabled !== 'true')
             .map(item => {
-                // 優先使用 dataset.textValue（原文），否則取原文區文字
                 const originalEl = item.querySelector('.text_grid_item_original');
                 return item.dataset.textValue || (originalEl ? originalEl.textContent.trim() : item.textContent.trim());
             })
             .filter(Boolean);
 
-        // 組合成新的輸入內容（用逗號分隔）
         const newValue = textValues.join(', ');
-
-        // 更新輸入框內容
         widget.inputEl.value = newValue;
-
-        // 觸發輸入事件，確保其他監聽器能收到更新
         widget.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         widget.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
 
-        logger.debug('已根據 Grid 順序更新輸入框（排除禁用項目）', { 
+        logger.debug(includeDisabled ? '已根據 Grid 順序更新輸入框（含停用項目，避免重繪消失）' : '已根據 Grid 順序更新輸入框（排除禁用項目）', { 
             newValue,
             enabledCount: textValues.length,
             totalCount: items.length
@@ -477,7 +474,11 @@ class TextGridManager {
                 const isDisabled = gridItem.dataset.disabled === 'true';
                 gridItem.dataset.disabled = isDisabled ? 'false' : 'true';
                 this._updateItemDisabledState(gridItem, !isDisabled);
-                if (widget && widget.inputEl) this._updateInputFromGrid(gridContainer, widget);
+                if (widget && widget.inputEl) {
+                    // 停用/啟用要影響上方文字：只寫入啟用項目，並跳過下一次 input 觸發的重繪，避免該 item 從 grid 消失
+                    widget._skipNextGridRenderFromInput = true;
+                    this._updateInputFromGrid(gridContainer, widget);
+                }
             });
             gridItem.addEventListener('mouseenter', () => {
                 if (gridItem.classList.contains('sortable-ghost') || gridItem.classList.contains('sortable-chosen') || gridItem.classList.contains('sortable-drag') || gridItem.dataset.disabled === 'true') return;
@@ -494,13 +495,27 @@ class TextGridManager {
         };
 
         const render = () => {
+            // 重繪前收集當前停用狀態，避免因上方原文觸發重繪時停用字消失
+            const disabledValues = new Set();
+            gridContainer.querySelectorAll('.text_grid_item[data-disabled="true"]').forEach(el => {
+                const v = el.dataset.textValue;
+                if (v) disabledValues.add(v);
+            });
             if (sortableInstance) {
                 try { sortableInstance.destroy(); } catch (e) {}
                 sortableInstance = null;
             }
             gridContainer.innerHTML = '';
             const items = getTextItems();
-            items.forEach((item, index) => gridContainer.appendChild(buildItemEl(item, index)));
+            items.forEach((item, index) => {
+                const el = buildItemEl(item, index);
+                gridContainer.appendChild(el);
+                const sourceValue = item.original != null ? item.original : (item.value || item.text);
+                if (sourceValue && disabledValues.has(sourceValue)) {
+                    el.dataset.disabled = 'true';
+                    this._updateItemDisabledState(el, true);
+                }
+            });
 
             if (this.Sortable && gridContainer.children.length > 0) {
                 sortableInstance = new this.Sortable(gridContainer, {
@@ -512,7 +527,7 @@ class TextGridManager {
                     filter: '.text_grid_item_disabled',
                     preventOnFilter: true,
                     onEnd: (evt) => {
-                        if (evt.oldIndex !== evt.newIndex && widget && widget.inputEl) this._updateInputFromGrid(gridContainer, widget);
+                        if (evt.oldIndex !== evt.newIndex && widget && widget.inputEl) this._updateInputFromGrid(gridContainer, widget, { keepDisabledInInput: true });
                     }
                 });
             }
@@ -523,6 +538,10 @@ class TextGridManager {
         let debounceTimer = null;
         const onInput = () => {
             if (inputListenerRemoved) return;
+            if (widget._skipNextGridRenderFromInput) {
+                widget._skipNextGridRenderFromInput = false;
+                return;
+            }
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => render(), 400);
         };
