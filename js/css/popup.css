@@ -1096,6 +1096,7 @@
 
 /* grid item 樣式與 .popup_tab_content.active 一致：使用相同 content 背景與邊框變數 */
 .text_grid_item {
+    position: relative;
     padding: 12px;
     background-color: var(--p-content-background);
     border: 1px solid var(--p-content-border-color);
@@ -1109,6 +1110,43 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+}
+
+/* 每個 grid 右上角刪除按鈕，僅 hover 時顯示 */
+.text_grid_item_delete_btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background-color: color-mix(in srgb, var(--p-content-background), transparent 30%);
+    color: var(--p-text-muted-color);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+    z-index: 2;
+}
+.text_grid_item:hover .text_grid_item_delete_btn {
+    opacity: 1;
+}
+.text_grid_item_delete_btn:hover {
+    background-color: color-mix(in srgb, var(--p-red-500), transparent 60%);
+    color: var(--p-text-color);
+}
+.clip-prompt-block-grid-wrapper .text_grid_item_delete_btn {
+    top: 1px;
+    right: 1px;
+    width: 16px;
+    height: 16px;
+    font-size: 12px;
 }
 
 /* 內嵌 grid item：與 translate_word_cache_item 一致，緊湊顯示 */

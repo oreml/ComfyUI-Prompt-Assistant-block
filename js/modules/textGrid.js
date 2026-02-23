@@ -413,6 +413,28 @@ class TextGridManager {
             gridItem.dataset.textValue = sourceValue;
             gridItem.dataset.disabled = 'false';
 
+            // 右上角刪除按鈕（僅 hover 時顯示）
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text_grid_item_delete_btn';
+            deleteBtn.type = 'button';
+            deleteBtn.title = '刪除此項';
+            deleteBtn.innerHTML = '×';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!widget || !widget.inputEl) return;
+                const items = Array.from(gridContainer.querySelectorAll('.text_grid_item'));
+                const idx = items.indexOf(gridItem);
+                if (idx === -1) return;
+                const values = items.map(el => el.dataset.textValue).filter(Boolean);
+                values.splice(idx, 1);
+                const newValue = values.join(', ');
+                widget.inputEl.value = newValue;
+                widget.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                widget.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            gridItem.appendChild(deleteBtn);
+
             // 原文顯示：若有 original（當前輸入是譯文），顯示 original；否則顯示當前輸入 text
             const displayOriginal = item.original != null ? item.original : (item.text || item.value || `項目 ${index + 1}`);
             // 翻譯顯示：
