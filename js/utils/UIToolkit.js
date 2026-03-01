@@ -111,6 +111,7 @@ class UIToolkit {
             'Show any [Crystools]',
             'CLIPTextEncode',   // 顯式包含 CLIP 相關
             'CLIPTextEncodePromptBlock', // 本擴展的 CLIP Text Encode (Prompt) Block
+            'StringBlockPromptBlock',    // 本擴展的 String Block (Prompt Block)，可接 Join Strings
             'CLIPTextEncodeSDXL',
             // 添加其他支持的节点类型
         ];

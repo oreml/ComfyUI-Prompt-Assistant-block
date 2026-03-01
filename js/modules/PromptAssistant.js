@@ -2814,11 +2814,12 @@ class PromptAssistant {
     }
 
     /**
-     * 若為 CLIPTextEncodePromptBlock 節點，在輸入文字下方插入可拖動 grid
+     * 若為 CLIPTextEncodePromptBlock 或 StringBlockPromptBlock 節點，在輸入文字下方插入可拖動 grid
      */
     _setupInlineTextGridIfNeeded(widget, container) {
         const nodeType = widget.node?.type || widget.nodeInfo?.nodeType || '';
-        if (nodeType !== 'CLIPTextEncodePromptBlock' || !container || !widget.inputEl) return;
+        const isBlockWithGrid = nodeType === 'CLIPTextEncodePromptBlock' || nodeType === 'StringBlockPromptBlock';
+        if (!isBlockWithGrid || !container || !widget.inputEl) return;
         if (container.querySelector('.clip-prompt-block-grid-wrapper') || widget._inlineTextGridDestroy) return;
 
         const wrapper = document.createElement('div');
@@ -3041,7 +3042,7 @@ class PromptAssistant {
                 instance._eventCleanupFunctions = [];
             }
 
-            // 3.4 清理 CLIPTextEncodePromptBlock 內嵌 grid
+            // 3.4 清理 CLIPTextEncodePromptBlock / StringBlockPromptBlock 內嵌 grid
             if (instance._inlineTextGridDestroy && typeof instance._inlineTextGridDestroy === 'function') {
                 try { instance._inlineTextGridDestroy(); } catch (e) { /* ignore */ }
                 instance._inlineTextGridDestroy = null;
