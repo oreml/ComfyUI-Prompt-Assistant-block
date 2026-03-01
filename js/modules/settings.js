@@ -858,6 +858,85 @@ export function registerSettings() {
                     }
                 },
 
+                // 單字翻譯緩存 匯出/匯入（同一列兩個按鈕，避免只顯示一項）
+                {
+                    id: "PromptAssistant.Settings.TranslateCacheImportExport",
+                    name: "單字翻譯緩存 匯出/匯入",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "翻譯緩存"],
+                    tooltip: "匯出：下載 JSON 備份。匯入：從 JSON 檔案匯入並與現有緩存合併（格式 [{ source, translated }]）",
+                    type: () => {
+                        const row = document.createElement("tr");
+                        row.className = "promptwidget-settings-row";
+                        const labelCell = document.createElement("td");
+                        labelCell.className = "comfy-menu-label";
+                        row.appendChild(labelCell);
+                        const cell = document.createElement("td");
+                        cell.style.display = "flex";
+                        cell.style.gap = "8px";
+                        cell.style.flexWrap = "wrap";
+
+                        const exportBtn = document.createElement("button");
+                        exportBtn.className = "comfy-btn";
+                        exportBtn.textContent = "匯出";
+                        exportBtn.type = "button";
+                        exportBtn.onclick = () => {
+                            try {
+                                const data = TranslateCacheService.exportTranslateCache();
+                                const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement("a");
+                                a.href = url;
+                                a.download = `翻譯緩存_${new Date().toISOString().slice(0, 10)}.json`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                                const total = data.length;
+                                app.extensionManager?.toast?.add?.({ severity: "success", summary: "匯出成功", detail: `已匯出 ${total} 條`, life: 3000 });
+                                logger.log(`單字翻譯緩存匯出 | 數量:${total}`);
+                            } catch (e) {
+                                logger.error(`單字翻譯緩存匯出失敗 | ${e.message}`);
+                                app.extensionManager?.toast?.add?.({ severity: "error", summary: "匯出失敗", detail: e.message, life: 3000 });
+                            }
+                        };
+
+                        const fileInput = document.createElement("input");
+                        fileInput.type = "file";
+                        fileInput.accept = ".json,application/json";
+                        fileInput.style.display = "none";
+                        fileInput.onchange = (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                try {
+                                    const text = reader.result;
+                                    const data = JSON.parse(text);
+                                    const count = TranslateCacheService.importTranslateCache(data);
+                                    e.target.value = "";
+                                    app.extensionManager?.toast?.add?.({ severity: "success", summary: "匯入成功", detail: `已匯入 ${count} 條`, life: 3000 });
+                                    logger.log(`單字翻譯緩存匯入 | 數量:${count}`);
+                                } catch (err) {
+                                    e.target.value = "";
+                                    logger.error(`單字翻譯緩存匯入失敗 | ${err.message}`);
+                                    app.extensionManager?.toast?.add?.({ severity: "error", summary: "匯入失敗", detail: err.message || "請確認檔案為 [{ source, translated }] 格式", life: 4000 });
+                                }
+                            };
+                            reader.readAsText(file, "UTF-8");
+                        };
+
+                        const importBtn = document.createElement("button");
+                        importBtn.className = "comfy-btn";
+                        importBtn.textContent = "匯入";
+                        importBtn.type = "button";
+                        importBtn.onclick = () => fileInput.click();
+
+                        cell.appendChild(exportBtn);
+                        cell.appendChild(importBtn);
+                        cell.appendChild(fileInput);
+                        row.appendChild(cell);
+                        return row;
+                    }
+                },
+
                 // 混合语言缓存选项
                 {
                     id: "PromptAssistant.Features.CacheMixedLangTranslation",
