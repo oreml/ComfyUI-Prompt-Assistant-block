@@ -1072,6 +1072,24 @@
 .clip-prompt-block-grid-wrapper {
     width: 100%;
     margin-top: 4px;
+    max-height: 180px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background-color: color-mix(in srgb, var(--p-content-background), transparent 85%);
+    border-radius: 8px;
+    padding: 4px 0;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--p-button-text-secondary-color), transparent 50%) transparent;
+}
+.clip-prompt-block-grid-wrapper::-webkit-scrollbar {
+    width: 6px;
+}
+.clip-prompt-block-grid-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+}
+.clip-prompt-block-grid-wrapper::-webkit-scrollbar-thumb {
+    background-color: color-mix(in srgb, var(--p-button-text-secondary-color), transparent 50%);
+    border-radius: 3px;
 }
 
 /* 內嵌 grid 容器：與 translate_word_cache_grid 一致，緊湊排列 */
