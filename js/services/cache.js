@@ -1285,17 +1285,39 @@ class TranslateCacheService {
     }
 
     /**
-     * 导出翻译缓存为 JSON
+     * 從完整翻譯緩存提取單字級緩存（與翻譯單字緩存 UI 一致）
+     */
+    static getWordTranslateCache() {
+        const cache = this.getAllTranslateCache();
+        const wordCache = new Map();
+        cache.forEach((translated, source) => {
+            const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            const translatedWords = translated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+            if (sourceWords.length === translatedWords.length && sourceWords.length > 0) {
+                sourceWords.forEach((word, index) => {
+                    const translatedWord = translatedWords[index];
+                    if (word && translatedWord) {
+                        if (!wordCache.has(word) || wordCache.get(word).length < translatedWord.length) {
+                            wordCache.set(word, translatedWord);
+                        }
+                    }
+                });
+            }
+        });
+        return wordCache;
+    }
+
+    /**
+     * 導出單字翻譯緩存為 JSON（格式 [{ source, translated }]，與翻譯單字緩存一致）
      */
     static exportTranslateCache() {
         try {
-            const cache = this.getAllTranslateCache();
-            const exportData = Array.from(cache.entries()).map(([source, translated]) => ({
+            const wordCache = this.getWordTranslateCache();
+            const exportData = Array.from(wordCache.entries()).map(([source, translated]) => ({
                 source: source,
                 translated: translated
             }));
-
-            logger.debug(`翻译缓存 | 导出 | 数量:${exportData.length}`);
+            logger.debug(`翻译缓存 | 导出单字翻译 | 数量:${exportData.length}`);
             return exportData;
         } catch (error) {
             logger.error(`翻译缓存 | 导出失败 | 错误:${error.message}`);
@@ -1304,7 +1326,7 @@ class TranslateCacheService {
     }
 
     /**
-     * 导入翻译缓存
+     * 導入單字翻譯緩存（格式 [{ source, translated }]，與匯出格式一致，會與現有緩存合併）
      */
     static importTranslateCache(data) {
         try {
@@ -1315,16 +1337,19 @@ class TranslateCacheService {
 
             const cache = this.getAllTranslateCache();
             let imported = 0;
-            
+
             data.forEach(item => {
-                if (item && item.source && item.translated) {
-                    cache.set(item.source, item.translated);
-                    imported++;
+                if (item && item.source != null && item.translated != null) {
+                    const src = String(item.source).trim();
+                    const trans = String(item.translated).trim();
+                    if (src && trans) {
+                        cache.set(src, trans);
+                        imported++;
+                    }
                 }
             });
 
             if (imported > 0) {
-                // 如果导入后超过最大限制，删除最旧的条目
                 if (cache.size > CACHE_CONFIG.MAX_TRANSLATE_CACHE) {
                     const entries = Array.from(cache.entries());
                     const newEntries = entries.slice(-CACHE_CONFIG.MAX_TRANSLATE_CACHE);
@@ -1332,7 +1357,7 @@ class TranslateCacheService {
                     newEntries.forEach(([key, value]) => cache.set(key, value));
                 }
                 this.saveAllTranslateCache(cache);
-                logger.debug(`翻译缓存 | 导入 | 导入数量:${imported}`);
+                logger.debug(`翻译缓存 | 导入单字翻译 | 导入数量:${imported}`);
             }
 
             return imported;
