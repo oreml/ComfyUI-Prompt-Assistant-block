@@ -8,6 +8,7 @@ import { UIToolkit } from "../utils/UIToolkit.js";
 import { PopupManager } from "../utils/popupManager.js";
 import { ResourceManager } from "../utils/resourceManager.js";
 import { EventManager } from "../utils/eventManager.js";
+import { showContextMenu } from "./uiComponents.js";
 
 /**
  * 文字 Grid 管理器類
@@ -406,12 +407,15 @@ class TextGridManager {
         let sortableInstance = null;
         let inputListenerRemoved = false;
 
-        const buildItemEl = (item, index) => {
+        const buildItemEl = (item, index, duplicateValues) => {
             const gridItem = document.createElement('div');
             gridItem.className = 'text_grid_item';
             const sourceValue = item.original != null ? item.original : (item.value || item.text);
             gridItem.dataset.textValue = sourceValue;
             gridItem.dataset.disabled = 'false';
+            if (duplicateValues && duplicateValues.has(sourceValue)) {
+                gridItem.classList.add('text_grid_item_duplicate');
+            }
 
             // 右上角刪除按鈕（僅 hover 時顯示）
             const deleteBtn = document.createElement('button');
@@ -497,6 +501,46 @@ class TextGridManager {
                 }
             });
 
+            // 右鍵選單：複制、刪除
+            gridItem.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const textToCopy = sourceValue;
+                const removeItemFromInput = () => {
+                    if (!widget || !widget.inputEl) return;
+                    const items = Array.from(gridContainer.querySelectorAll('.text_grid_item'));
+                    const idx = items.indexOf(gridItem);
+                    if (idx === -1) return;
+                    const values = items.map(el => el.dataset.textValue).filter(Boolean);
+                    values.splice(idx, 1);
+                    widget.inputEl.value = values.join(', ');
+                    widget.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    widget.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+                showContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    items: [
+                        {
+                            label: '複制',
+                            icon: 'pi-copy',
+                            onClick: () => {
+                                if (navigator.clipboard && textToCopy) {
+                                    navigator.clipboard.writeText(textToCopy).catch(() => {});
+                                }
+                            }
+                        },
+                        { separator: true },
+                        {
+                            label: '刪除',
+                            icon: 'pi-trash',
+                            danger: true,
+                            onClick: removeItemFromInput
+                        }
+                    ]
+                });
+            });
+
             return gridItem;
         };
 
@@ -513,8 +557,14 @@ class TextGridManager {
             }
             gridContainer.innerHTML = '';
             const items = getTextItems();
+            const valueCount = {};
+            items.forEach(it => {
+                const v = it.original != null ? it.original : (it.value || it.text);
+                if (v) valueCount[v] = (valueCount[v] || 0) + 1;
+            });
+            const duplicateValues = new Set(Object.keys(valueCount).filter(k => valueCount[k] > 1));
             items.forEach((item, index) => {
-                const el = buildItemEl(item, index);
+                const el = buildItemEl(item, index, duplicateValues);
                 gridContainer.appendChild(el);
                 const sourceValue = item.original != null ? item.original : (item.value || item.text);
                 if (sourceValue && disabledValues.has(sourceValue)) {

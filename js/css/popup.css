@@ -1228,6 +1228,19 @@
 }
 
 /* 禁用狀態樣式 */
+/* 重複出現的 key：用顏色提醒用戶 */
+.text_grid_item_duplicate {
+    border-color: var(--p-orange-500, #ff9800) !important;
+    background-color: color-mix(in srgb, var(--p-orange-500, #ff9800), transparent 88%) !important;
+}
+.text_grid_item_duplicate .text_grid_item_original {
+    color: var(--p-orange-600, #f57c00) !important;
+}
+.clip-prompt-block-grid-wrapper .text_grid_item_duplicate {
+    border-color: var(--p-orange-500, #ff9800) !important;
+    background-color: color-mix(in srgb, var(--p-orange-500, #ff9800), transparent 90%) !important;
+}
+
 .text_grid_item_disabled {
     opacity: 0.5 !important;
     cursor: not-allowed !important;
