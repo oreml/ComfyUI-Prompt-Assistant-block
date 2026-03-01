@@ -8,7 +8,8 @@ import { UIToolkit } from "../utils/UIToolkit.js";
 import { PopupManager } from "../utils/popupManager.js";
 import { ResourceManager } from "../utils/resourceManager.js";
 import { EventManager } from "../utils/eventManager.js";
-import { showContextMenu } from "./uiComponents.js";
+import { showContextMenu, createConfirmPopup } from "./uiComponents.js";
+import { TranslateCacheService } from "../services/cache.js";
 
 /**
  * 文字 Grid 管理器類
@@ -501,11 +502,12 @@ class TextGridManager {
                 }
             });
 
-            // 右鍵選單：複制、刪除
+            // 右鍵選單：複制、修改翻譯字、刪除
             gridItem.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 const textToCopy = sourceValue;
+                const currentTranslated = gridItem.querySelector('.text_grid_item_translated')?.textContent?.trim() || '';
                 const removeItemFromInput = () => {
                     if (!widget || !widget.inputEl) return;
                     const items = Array.from(gridContainer.querySelectorAll('.text_grid_item'));
@@ -516,6 +518,81 @@ class TextGridManager {
                     widget.inputEl.value = values.join(', ');
                     widget.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
                     widget.inputEl.dispatchEvent(new Event('change', { bubbles: true }));
+                };
+                const openEditTranslation = () => {
+                    let translatedInput = null;
+                    createConfirmPopup({
+                        target: gridItem,
+                        message: '修改翻譯字',
+                        icon: 'pi-pencil',
+                        confirmLabel: '保存',
+                        cancelLabel: '取消',
+                        renderFormContent: (formContainer) => {
+                            formContainer.style.display = 'flex';
+                            formContainer.style.flexDirection = 'column';
+                            formContainer.style.gap = '8px';
+                            const labelOrig = document.createElement('label');
+                            labelOrig.textContent = '原文';
+                            labelOrig.style.fontSize = '12px';
+                            labelOrig.style.color = 'var(--p-text-muted-color)';
+                            formContainer.appendChild(labelOrig);
+                            const origDisplay = document.createElement('div');
+                            origDisplay.textContent = sourceValue;
+                            origDisplay.style.padding = '6px 8px';
+                            origDisplay.style.background = 'color-mix(in srgb, var(--p-content-background), transparent 50%)';
+                            origDisplay.style.borderRadius = '4px';
+                            origDisplay.style.fontSize = '13px';
+                            formContainer.appendChild(origDisplay);
+                            const labelTrans = document.createElement('label');
+                            labelTrans.textContent = '翻譯';
+                            labelTrans.style.fontSize = '12px';
+                            labelTrans.style.color = 'var(--p-text-muted-color)';
+                            formContainer.appendChild(labelTrans);
+                            translatedInput = document.createElement('input');
+                            translatedInput.type = 'text';
+                            translatedInput.value = currentTranslated;
+                            translatedInput.placeholder = '輸入翻譯';
+                            translatedInput.className = 'p-inputtext p-component';
+                            translatedInput.style.width = '100%';
+                            translatedInput.style.padding = '6px 8px';
+                            formContainer.appendChild(translatedInput);
+                        },
+                        onConfirm: () => {
+                            const newTranslated = (translatedInput && translatedInput.value) ? translatedInput.value.trim() : '';
+                            if (!newTranslated) {
+                                throw new Error('翻譯不能為空');
+                            }
+                            const cache = TranslateCacheService.getAllTranslateCache();
+                            const updatedEntries = new Map();
+                            cache.forEach((oldTranslated, source) => {
+                                const sourceWords = source.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                                const translatedWords = oldTranslated.split(/[,，、]/).map(w => w.trim()).filter(w => w);
+                                if (sourceWords.length === translatedWords.length) {
+                                    const wordIndex = sourceWords.indexOf(sourceValue);
+                                    if (wordIndex !== -1) {
+                                        translatedWords[wordIndex] = newTranslated;
+                                        const newSource = sourceWords.join(', ');
+                                        const newTranslatedText = translatedWords.join(', ');
+                                        if (!updatedEntries.has(newSource) || updatedEntries.get(newSource).length < newTranslatedText.length) {
+                                            updatedEntries.set(newSource, newTranslatedText);
+                                        }
+                                    } else {
+                                        updatedEntries.set(source, oldTranslated);
+                                    }
+                                } else {
+                                    updatedEntries.set(source, oldTranslated);
+                                }
+                            });
+                            TranslateCacheService.clearAllTranslateCache();
+                            updatedEntries.forEach((translated, source) => {
+                                TranslateCacheService.addTranslateCache(source, translated);
+                            });
+                            if (widget && widget.inputEl) {
+                                widget.inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                            logger.debug(`[Grid] 修改翻譯字 | 原文:${sourceValue} | 翻譯:${newTranslated}`);
+                        }
+                    });
                 };
                 showContextMenu({
                     x: e.clientX,
@@ -529,6 +606,11 @@ class TextGridManager {
                                     navigator.clipboard.writeText(textToCopy).catch(() => {});
                                 }
                             }
+                        },
+                        {
+                            label: '修改翻譯字',
+                            icon: 'pi-pencil',
+                            onClick: openEditTranslation
                         },
                         { separator: true },
                         {
