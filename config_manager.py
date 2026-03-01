@@ -1192,7 +1192,6 @@ class ConfigManager:
             # 記錄載入的服務列表
             service_ids = [s.get('id', 'unknown') for s in services]
             service_names = [s.get('name', 'unknown') for s in services]
-            self._log(f"載入服務商列表 | 總數:{len(services)} | IDs:{', '.join(service_ids)}")
             
             # 檢查並補全缺失的預設服務
             import copy
@@ -1230,7 +1229,6 @@ class ConfigManager:
                 openrouter_service = next((s for s in services if s.get('id') == 'openrouter'), None)
                 if openrouter_service:
                     vlm_models = openrouter_service.get('vlm_models', [])
-                    self._log(f"✅ OpenRouter 已載入 | vlm_models 數量:{len(vlm_models)}")
             
             return services
         else:
