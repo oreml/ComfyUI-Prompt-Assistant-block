@@ -853,6 +853,19 @@ class ConfigManager:
                 "top_p": 0.9,
                 "providers": {}
             })
+
+        # Argos Translate 本地翻譯（無需 API Key）
+        if current_service_id == 'argos':
+            return with_target_chinese({
+                "provider": "argos",
+                "model": "",
+                "base_url": "",
+                "api_key": "",
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "top_p": 0.9,
+                "providers": {}
+            })
         
         # 查找对应的LLM服务
         service = self._get_service_by_id(current_service_id)
@@ -1639,6 +1652,25 @@ class ConfigManager:
                 else:
                     self._log("设置当前服务商失败: 保存配置失败")
                     return False
+
+            # ---Argos Translate 本地翻譯---
+            if service_id == 'argos':
+                if service_type not in ['translate']:
+                    self._log(f"设置当前服务商失败: Argos Translate 不支持{service_type}服务类型")
+                    return False
+                if 'current_services' not in config:
+                    config['current_services'] = {}
+                prev = config['current_services'].get(service_type)
+                prev_chinese = prev.get('target_chinese', 'zh-TW') if isinstance(prev, dict) else 'zh-TW'
+                config['current_services'][service_type] = {
+                    "service": "argos",
+                    "model": "",
+                    "target_chinese": prev_chinese,
+                }
+                if self.save_config(config):
+                    self._log(f"当前服务商已切换: Argos Translate ({service_type})")
+                    return True
+                return False
             
             # ---其他服务:验证服务存在---
             service = self._get_service_by_id(service_id)

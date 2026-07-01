@@ -37,7 +37,8 @@ const SERVICE_TYPES = {
         serviceType: 'translate',
         filterKey: 'llm_models',
         includeGoogle: true,
-        includeBaidu: true
+        includeBaidu: true,
+        includeArgos: true
     },
     llm: {
         name: '提示詞優化',
@@ -156,6 +157,9 @@ const serviceSelector = {
         if (config.includeBaidu) {
             options.push({ value: 'baidu', text: '百度翻譯' });
         }
+        if (config.includeArgos) {
+            options.push({ value: 'argos', text: 'Argos Translate（本地）' });
+        }
 
         // 過濾並添加其他服務
         services
@@ -171,6 +175,24 @@ const serviceSelector = {
             });
 
         return options;
+    },
+
+    /** 機械翻譯選項（Google / 百度 / Argos 本地） */
+    getMachineTranslateOptions() {
+        return [
+            { value: 'google', text: 'Google 翻譯' },
+            { value: 'baidu', text: '百度翻譯' },
+            { value: 'argos', text: 'Argos Translate（本地）' }
+        ];
+    },
+
+    /** 當前機械翻譯服務；若目前為 LLM 則顯示預設 google */
+    async getCurrentMachineTranslate() {
+        const current = await this.getCurrentService('translate');
+        if (current === 'google' || current === 'baidu' || current === 'argos') {
+            return current;
+        }
+        return 'google';
     }
 };
 
@@ -292,9 +314,11 @@ function showRulesConfigModal() {
  * 創建服務選擇器下拉框
  * @param {string} type - 服務類型: 'translate' | 'llm' | 'vlm'
  * @param {string} label - 顯示名稱
+ * @param {{ machineOnly?: boolean }} [opts] - machineOnly 時僅顯示 Google / 百度（機械翻譯）
  * @returns {HTMLElement} 設置行元素
  */
-function createServiceSelector(type, label) {
+function createServiceSelector(type, label, opts = {}) {
+    const { machineOnly = false } = opts;
     const row = document.createElement("tr");
     row.className = "promptwidget-settings-row";
 
@@ -328,8 +352,12 @@ function createServiceSelector(type, label) {
 
             // 獲取服務列表和當前選中的服務
             const [options, currentService] = await Promise.all([
-                serviceSelector.getServiceOptions(type),
-                serviceSelector.getCurrentService(type)
+                machineOnly
+                    ? serviceSelector.getMachineTranslateOptions()
+                    : serviceSelector.getServiceOptions(type),
+                machineOnly
+                    ? serviceSelector.getCurrentMachineTranslate()
+                    : serviceSelector.getCurrentService(type)
             ]);
 
             // 如果已經存在下拉框實例，則嘗試增量更新
@@ -415,6 +443,15 @@ function createServiceSelector(type, label) {
         updateContent(true);
     };
     window.addEventListener('pa-config-updated', onConfigUpdated);
+
+    // 翻譯服務切換時同步（機械翻譯與完整翻譯選擇器互通）
+    const onServiceChanged = (e) => {
+        const detail = e.detail || {};
+        if (type === 'translate' && detail.service_type === 'translate') {
+            updateContent(true);
+        }
+    };
+    window.addEventListener('pa-service-changed', onServiceChanged);
 
     // 銷毀監聽器的清理函數（簡單處理，因為設置面板通常隨頁面銷毀）
     // 如果之後有更複雜的組件掛載邏輯，可以在這裡返回一個清理函數給外部調用
@@ -841,6 +878,15 @@ export function registerSettings() {
                         handleFeatureChange('翻譯功能', value, oldValue);
                         logger.log(`翻譯功能 - 已${value ? "啟用" : "禁用"}`);
                     }
+                },
+
+                // 機械翻譯服務（Google / 百度）
+                {
+                    id: "PromptAssistant.MachineTranslate.Provider",
+                    name: "選擇機械翻譯",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "機械翻譯"],
+                    tooltip: "block 文字翻譯使用的機械翻譯服務（Google、百度或 Argos 本地）。選擇後會切換翻譯服務；若需使用大語言模型翻譯，請在「配置 > 翻譯 > 選擇翻譯服務」中選擇。",
+                    type: () => createServiceSelector('translate', '機械翻譯', { machineOnly: true })
                 },
 
                 // 使用翻译缓存功能

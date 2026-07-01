@@ -422,15 +422,55 @@ class APIService {
     }
 
     /**
-     * 批量翻译（根据当前翻译服务类型选择 Google 或百度）
+     * Argos Translate 本地翻譯 API
+     */
+    static async argosTranslate(text, from = 'auto', to = 'zh', request_id = null, is_auto = false) {
+        if (!request_id) {
+            request_id = this.generateRequestId('trans', 'argos');
+        }
+        const controller = new AbortController();
+        const signal = controller.signal;
+        runningRequests.set(request_id, controller);
+        try {
+            if (!text || text.trim() === '') {
+                throw new Error('待翻译文本不能为空');
+            }
+            const apiUrl = this.getApiUrl('argos/translate');
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, from, to, request_id, is_auto }),
+                signal
+            });
+            return await response.json();
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                logger.debug(`Argos 翻译请求被用户中止 | ID: ${request_id}`);
+                return { success: false, error: '请求已取消', cancelled: true };
+            }
+            return { success: false, error: error.message };
+        } finally {
+            if (runningRequests.has(request_id)) {
+                runningRequests.delete(request_id);
+            }
+        }
+    }
+
+    /**
+     * 批量翻译（根据当前翻译服务类型选择 Google、百度或 Argos）
      */
     static async batchMachineTranslate(texts, from = 'auto', to = 'zh', provider = 'google') {
         try {
             if (!Array.isArray(texts) || texts.length === 0) {
                 throw new Error('待翻译文本数组不能为空');
             }
+            const translateMap = {
+                google: this.googleTranslate.bind(this),
+                baidu: this.baiduTranslate.bind(this),
+                argos: this.argosTranslate.bind(this),
+            };
+            const translateOne = translateMap[provider] || this.googleTranslate.bind(this);
             const results = [];
-            const translateOne = provider === 'google' ? this.googleTranslate.bind(this) : this.baiduTranslate.bind(this);
             for (const text of texts) {
                 const result = await translateOne(text, from, to);
                 results.push(result);

@@ -2218,6 +2218,7 @@ class PromptAssistant {
                                     const configResp = await fetch(APIService.getApiUrl('/config/translate'));
                                     let isGoogle = false;
                                     let isBaidu = false;
+                                    let isArgos = false;
 
                                     if (configResp.ok) {
                                         const config = await configResp.json();
@@ -2225,6 +2226,8 @@ class PromptAssistant {
                                             isGoogle = true;
                                         } else if (config.provider === 'baidu') {
                                             isBaidu = true;
+                                        } else if (config.provider === 'argos') {
+                                            isArgos = true;
                                         }
                                     }
 
@@ -2237,6 +2240,13 @@ class PromptAssistant {
                                         );
                                     } else if (isBaidu) {
                                         result = await APIService.baiduTranslate(
+                                            contentToTranslate,
+                                            langResult.from,
+                                            langResult.to,
+                                            request_id
+                                        );
+                                    } else if (isArgos) {
+                                        result = await APIService.argosTranslate(
                                             contentToTranslate,
                                             langResult.from,
                                             langResult.to,
@@ -2412,6 +2422,31 @@ class PromptAssistant {
                                 logger.log(`翻譯服務切換 | 服務: 百度翻譯`);
                                 window.dispatchEvent(new CustomEvent('pa-service-changed', {
                                     detail: { service_type: 'translate', service_id: 'baidu' }
+                                }));
+                            } catch (err) {
+                                logger.error(`切換翻譯服務失敗: ${err.message}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'error', `切換失敗: ${err.message}`);
+                            }
+                        }
+                    });
+
+                    // Argos Translate 本地翻譯
+                    const isArgosCurrent = currentTranslateService === 'argos';
+                    serviceMenuItems.push({
+                        label: 'Argos Translate（本地）',
+                        icon: `<span class="pi ${isArgosCurrent ? 'pi-check-circle active-status' : 'pi-circle-off inactive-status'}"></span>`,
+                        onClick: async (context) => {
+                            try {
+                                const res = await fetch(APIService.getApiUrl('/services/current'), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ service_type: 'translate', service_id: 'argos' })
+                                });
+                                if (!res.ok) throw new Error(`服務器返回錯誤: ${res.status}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'success', `已切換到: Argos Translate`);
+                                logger.log(`翻譯服務切換 | 服務: Argos Translate`);
+                                window.dispatchEvent(new CustomEvent('pa-service-changed', {
+                                    detail: { service_type: 'translate', service_id: 'argos' }
                                 }));
                             } catch (err) {
                                 logger.error(`切換翻譯服務失敗: ${err.message}`);

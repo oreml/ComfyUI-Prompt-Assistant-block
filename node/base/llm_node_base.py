@@ -79,9 +79,10 @@ class LLMNodeBase(BaseNode):
         
         options = []
         
-        # ---硬编码添加机器翻译（Google 为首选，百度其次）---
+        # ---硬编码添加机器翻译（Google 为首选，百度其次，Argos 本地）---
         options.append("Google 翻译")
         options.append("百度翻译")
+        options.append("Argos Translate")
         
         # ---动态获取其他LLM服务---
         services = config_manager.get_all_services()
@@ -108,6 +109,7 @@ class LLMNodeBase(BaseNode):
         特殊处理:
         - "Google 翻译": 返回 ('google', None)
         - "百度翻译": 返回 ('baidu', None)
+        - "Argos Translate": 返回 ('argos', None)
         
         参数:
             service_model_str: 服务/模型字符串,例如 "OpenRouter/openai/gpt-4o-mini" 或 "Google 翻译"
@@ -131,6 +133,8 @@ class LLMNodeBase(BaseNode):
             return 'google', None
         if service_name in ['百度翻译', '百度', 'baidu']:
             return 'baidu', None
+        if service_name in ['Argos Translate', 'Argos', 'argos']:
+            return 'argos', None
         
         # 查找对应的service_id
         services = config_manager.get_all_services()

@@ -533,6 +533,7 @@ class NodeHelpTranslator {
             let translations = [];
             let isGoogle = false;
             let isBaidu = false;
+            let isArgos = false;
 
             // 1. 获取全局翻译配置
             // 直接使用后端全局配置（与 PromptAssistant 共享）
@@ -544,6 +545,8 @@ class NodeHelpTranslator {
                         isGoogle = true;
                     } else if (config.provider === 'baidu') {
                         isBaidu = true;
+                    } else if (config.provider === 'argos') {
+                        isArgos = true;
                     }
                 }
             } catch (e) {
@@ -581,6 +584,20 @@ class NodeHelpTranslator {
                 const successCount = translations.filter(t => t !== null).length;
                 if (successCount === 0 && textsToTranslate.length > 0) {
                     throw new Error('所有文本翻译失败 (Baidu)');
+                }
+
+            } else if (isArgos) {
+                logger.log(`[NodeHelpTranslator] 使用 Argos Translate 本地翻譯 (${from}->${to})`);
+                const results = await APIService.batchMachineTranslate(textsToTranslate, from, to, 'argos');
+                translations = results.map(r => {
+                    if (r && r.success && r.data && r.data.translated) {
+                        return r.data.translated;
+                    }
+                    return null;
+                });
+                const successCount = translations.filter(t => t !== null).length;
+                if (successCount === 0 && textsToTranslate.length > 0) {
+                    throw new Error('所有文本翻译失败 (Argos)');
                 }
 
             } else {
@@ -1295,9 +1312,33 @@ class NodeHelpTranslator {
             }
         });
 
+        // 3. Argos Translate 本地翻譯
+        const isArgos = currentServiceId === 'argos';
+        menuItems.push({
+            label: 'Argos Translate（本地）',
+            icon: isArgos ? 'pi pi-check' : '',
+            command: async () => {
+                const success = await this._setTranslateConfig('argos', '');
+                if (success) {
+                    this._currentTranslateConfig = { provider: 'argos', model: '' };
+                    UIToolkit.showStatusTip(
+                        document.querySelector(`.pa-translate-btn[data-node-name="${nodeName}"]`),
+                        'success',
+                        '已选择: Argos Translate'
+                    );
+                    if (this.currentHelpPanel.splitBtn) {
+                        this.currentHelpPanel.splitBtn.updateMenu(this._getMenuItems(nodeName, currentMode));
+                    }
+                    window.dispatchEvent(new CustomEvent('pa-service-changed', {
+                        detail: { service_type: 'translate', service_id: 'argos' }
+                    }));
+                }
+            }
+        });
+
         menuItems.push({ separator: true });
 
-        // 2. 为每个 LLM 服务创建菜单项
+        // 4. 为每个 LLM 服务创建菜单项
         services.filter(s => s.llm_models && s.llm_models.length > 0).forEach(service => {
             const isCurrentService = currentServiceId === service.id;
             const models = service.llm_models || [];

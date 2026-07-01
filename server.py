@@ -3,6 +3,7 @@ from server import PromptServer
 from .config_manager import config_manager
 from .services.baidu import BaiduTranslateService
 from .services.google import GoogleTranslateService
+from .services.argos import ArgosTranslateService
 from .services.llm import LLMService
 from .services.vlm import VisionService
 from .services.model_list import get_models_from_service
@@ -29,6 +30,32 @@ NODE_DIR_NAME = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
 API_PREFIX = f'/{NODE_DIR_NAME}/api'
 
 # print(f"{PREFIX} API 路由已挂载至: {API_PREFIX}")
+
+
+async def _read_json_body(request, endpoint_name=""):
+    """
+    讀取並解析 JSON 請求體。
+    空 body 或無效 JSON 時返回 (None, error_response)，成功返回 (data, None)。
+    """
+    body_bytes = await request.read()
+    if not body_bytes:
+        req_id = request.headers.get("X-Request-ID", "")
+        if not req_id:
+            print(f"{PREFIX} [{endpoint_name}] 非本擴展或舊緩存請求(空body)已忽略，建議強制刷新頁面 (Ctrl+Shift+R)")
+        else:
+            print(f"{WARN_PREFIX} [{endpoint_name}] 请求体为空 | X-Request-ID={req_id}")
+        return None, web.json_response({
+            "success": False,
+            "error": "请求体为空。若为本扩展，请强制刷新页面 (Ctrl+Shift+R) 后重试。"
+        }, status=400)
+    try:
+        return json.loads(body_bytes.decode("utf-8")), None
+    except json.JSONDecodeError as e:
+        print(f"{WARN_PREFIX} [{endpoint_name}] JSON解析失败 | {e!r}")
+        return None, web.json_response({
+            "success": False,
+            "error": "请求体不是有效的JSON"
+        }, status=400)
 
 # 在服务器初始化时验证激活提示词
 config_manager.validate_and_fix_active_prompts()
@@ -246,7 +273,9 @@ async def create_service(request):
     请求体: {type, name, base_url, api_key, description}
     """
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "create_service")
+        if err is not None:
+            return err
         
         service_type = data.get('type')
         name = data.get('name')
@@ -384,7 +413,9 @@ async def set_current_service_api(request):
     请求体: {service_type: 'llm'|'vlm'|'translate', service_id: string, model_name?: string}
     """
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "set_current_service")
+        if err is not None:
+            return err
         service_type = data.get('service_type')
         service_id = data.get('service_id')
         model_name = data.get('model_name')  # 可选参数
@@ -747,21 +778,24 @@ async def get_tags_config(request):
 
 @PromptServer.instance.routes.get(f'{API_PREFIX}/config/tags_user')
 async def get_user_tags_config(request):
-    """获取用户自定义标签配置"""
+    """获取用户自定义标签配置（異常時回傳預設，避免前端 500）"""
     try:
-        # 使用配置管理器加载用户标签
         user_tags = config_manager.load_user_tags()
-        
+        if not isinstance(user_tags, dict):
+            user_tags = getattr(config_manager, 'default_user_tags', {"favorites": []})
         return web.json_response(user_tags)
     except Exception as e:
         print(f"{ERROR_PREFIX} 用户标签配置加载失败 | 错误:{str(e)}")
-        return web.json_response({"error": str(e)}, status=500)
+        default = getattr(config_manager, 'default_user_tags', {"favorites": []})
+        return web.json_response(default)
 
 @PromptServer.instance.routes.post(f'{API_PREFIX}/config/tags_user')
 async def update_user_tags_config(request):
     """更新用户自定义标签配置"""
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "tags_user")
+        if err is not None:
+            return err
         
         # 检查数据结构是否正确
         if not isinstance(data, dict):
@@ -1098,7 +1132,9 @@ async def update_active_prompt_config(request):
 async def update_llm_config(request):
     """更新LLM配置"""
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "config/llm")
+        if err is not None:
+            return err
         current_provider = data.get('current_provider')
         providers = data.get('providers', {})
         
@@ -1159,7 +1195,9 @@ async def update_llm_config(request):
 async def update_vision_config(request):
     """更新视觉模型配置"""
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "config/vision")
+        if err is not None:
+            return err
         current_provider = data.get('current_provider')
         providers = data.get('providers', {})
         
@@ -1320,6 +1358,53 @@ async def baidu_translate(request):
     except Exception as e:
         error_msg = str(e)
         print(f"{ERROR_PREFIX} 百度翻译请求异常 | 错误:{error_msg}")
+        return web.json_response({"success": False, "error": error_msg})
+    finally:
+        if request_id and request_id in ACTIVE_TASKS:
+            del ACTIVE_TASKS[request_id]
+
+@PromptServer.instance.routes.get(f'{API_PREFIX}/argos/status')
+async def argos_translate_status(request):
+    """Argos Translate 安裝狀態與已安裝語言包"""
+    try:
+        from .services.argos import ARGOS_AVAILABLE, ArgosTranslateService
+        pairs = ArgosTranslateService.get_installed_language_pairs() if ARGOS_AVAILABLE else []
+        return web.json_response({
+            "available": ARGOS_AVAILABLE,
+            "installed_pairs": [{"from": a, "to": b} for a, b in pairs],
+        })
+    except Exception as e:
+        return web.json_response({"available": False, "error": str(e)}, status=500)
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/argos/translate')
+async def argos_translate(request):
+    """Argos Translate 本地翻譯 API"""
+    request_id = None
+    try:
+        data = await request.json()
+        text = data.get("text")
+        from_lang = data.get("from", "auto")
+        to_lang = data.get("to", "zh")
+        if to_lang == "zh":
+            translate_config = config_manager.get_translate_config()
+            to_lang = translate_config.get("target_chinese", "zh-TW")
+        request_id = data.get("request_id")
+        is_auto = data.get("is_auto", False)
+        if not request_id:
+            return web.json_response({"success": False, "error": "缺少request_id"}, status=400)
+        from_lang_name = {"auto": "自动", "zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(from_lang, from_lang)
+        to_lang_name = {"zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(to_lang, to_lang)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_FRONTEND, "Argos Translate", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
+        task = asyncio.create_task(ArgosTranslateService.translate(text, from_lang, to_lang, request_id, is_auto, task_type=TASK_TRANSLATE, source=SOURCE_FRONTEND))
+        ACTIVE_TASKS[request_id] = task
+        result = await task
+        return web.json_response(result)
+    except asyncio.CancelledError:
+        print(f"\r{_ANSI_CLEAR_EOL}{WARN_PREFIX} Argos 翻译任务被取消 | ID:{request_id}", flush=True)
+        return web.json_response({"success": False, "error": "请求已取消", "cancelled": True}, status=400)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"{ERROR_PREFIX} Argos 翻译请求异常 | 错误:{error_msg}")
         return web.json_response({"success": False, "error": error_msg})
     finally:
         if request_id and request_id in ACTIVE_TASKS:

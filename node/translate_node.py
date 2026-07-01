@@ -11,6 +11,7 @@ from comfy.model_management import InterruptProcessingException
 from ..services.llm import LLMService
 from ..services.baidu import BaiduTranslateService
 from ..services.google import GoogleTranslateService
+from ..services.argos import ArgosTranslateService
 from ..utils.common import format_api_error, format_model_with_thinking, generate_request_id, log_prepare, log_error, TASK_TRANSLATE, SOURCE_NODE
 from ..services.thinking_control import build_thinking_suppression
 from .base import LLMNodeBase
@@ -140,6 +141,8 @@ class PromptTranslate(LLMNodeBase):
             # ---百度翻譯---
             elif service_id == 'baidu':
                 request_id, result = self._translate_with_baidu(source_text, detected_lang, to_lang, translate_service, from_lang_name, to_lang_name, unique_id)
+            elif service_id == 'argos':
+                request_id, result = self._translate_with_argos(source_text, detected_lang, to_lang, translate_service, from_lang_name, to_lang_name, unique_id)
             else:
                 # ---LLM翻譯:獲取服務配置---
                 from ..config_manager import config_manager
@@ -209,6 +212,22 @@ class PromptTranslate(LLMNodeBase):
             source=SOURCE_NODE
         )
 
+        return request_id, result
+
+    def _translate_with_argos(self, text, from_lang, to_lang, service_name, from_lang_name, to_lang_name, unique_id):
+        """使用 Argos Translate 本地翻譯"""
+        request_id = generate_request_id("trans", "argos", unique_id)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_NODE, "Argos Translate", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "長度": len(text)})
+        result = self._run_llm_task(
+            ArgosTranslateService.translate,
+            service_name,
+            text=text,
+            from_lang=from_lang,
+            to_lang=to_lang,
+            request_id=request_id,
+            task_type=TASK_TRANSLATE,
+            source=SOURCE_NODE
+        )
         return request_id, result
 
     def _translate_with_llm(self, text, from_lang, to_lang, service_id, model_name, service, service_display_name, from_lang_name, to_lang_name, auto_unload, unique_id):
