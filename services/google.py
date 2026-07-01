@@ -11,13 +11,15 @@ from typing import Optional
 
 from ..utils.common import ProgressBar, TASK_TRANSLATE, WARN_PREFIX
 
-# 嘗試導入 googletrans（備選方案）
+# 嘗試導入 googletrans（備選方案；與 httpcore>=1.0 不相容時會載入失敗，不應阻斷整個擴展）
+_GOOGLETRANS_IMPORT_ERROR = None
 try:
     from googletrans import Translator
     GOOGLETRANS_AVAILABLE = True
-except ImportError:
+except Exception as e:
     GOOGLETRANS_AVAILABLE = False
     Translator = None
+    _GOOGLETRANS_IMPORT_ERROR = str(e)
 
 
 # Google 目標語言碼：zh-TW（繁中）、zh-CN（簡中）、zh 預設簡中、en
@@ -137,9 +139,10 @@ class GoogleTranslateService:
         支持長文本分段翻譯
         """
         if not GOOGLETRANS_AVAILABLE:
+            err = _GOOGLETRANS_IMPORT_ERROR or "googletrans 未安裝"
             return {
                 "success": False,
-                "error": "Google 翻译: googletrans 庫未安裝，請運行 pip install googletrans==4.0.0rc1"
+                "error": f"Google 翻译: googletrans 備選不可用 ({err})",
             }
 
         try:
@@ -255,9 +258,14 @@ class GoogleTranslateService:
         # 如果沒有 API Key，使用 googletrans 備選方案
         if not api_key:
             if not GOOGLETRANS_AVAILABLE:
+                hint = "請在 API 管理中配置 Google 翻譯 API Key，或改用百度/Argos 本地翻譯"
+                if _GOOGLETRANS_IMPORT_ERROR:
+                    hint += f"；googletrans 不可用: {_GOOGLETRANS_IMPORT_ERROR}"
+                else:
+                    hint += "；或安裝 googletrans==4.0.0rc1（需 httpcore<1.0，可能與 httpx 衝突）"
                 return {
                     "success": False,
-                    "error": "Google 翻译: 未配置 API Key 且 googletrans 庫未安裝。請在 API 管理中配置 Google 翻譯的 API Key，或運行 pip install googletrans==4.0.0rc1"
+                    "error": f"Google 翻译: 未配置 API Key 且 googletrans 備選不可用。{hint}",
                 }
 
             # 使用 googletrans

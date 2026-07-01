@@ -1,5 +1,6 @@
 httpx
 imageio
 imageio-ffmpeg
-googletrans==4.0.0rc1
+# googletrans 為 Google 翻譯無 API Key 時的備選，與 httpcore>=1.0 不相容；未安裝不影響擴展載入
+# googletrans==4.0.0rc1
 argostranslate
