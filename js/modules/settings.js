@@ -16,6 +16,8 @@ import { APIService } from "../services/api.js";
 
 import { apiConfigManager } from "./apiConfigManager.js";
 import { rulesConfigManager } from "./rulesConfigManager.js";
+import { ArgosLanguagePack } from "./argosLanguagePack.js";
+import { translateCacheManager } from "./translateCacheManager.js";
 import {
     createSettingsDialog,
     closeModalWithAnimation,
@@ -287,6 +289,23 @@ function showAPIConfigModal() {
             severity: "error",
             summary: "開啟配置失敗",
             detail: error.message || "開啟配置彈窗過程中發生錯誤",
+            life: 3000
+        });
+    }
+}
+
+/**
+ * 顯示翻譯緩存管理器彈窗
+ */
+function showTranslateCacheModal() {
+    try {
+        translateCacheManager.showTranslateCacheModal();
+    } catch (error) {
+        logger.error(`開啟翻譯緩存管理器失敗: ${error.message}`);
+        app.extensionManager.toast.add({
+            severity: "error",
+            summary: "開啟失敗",
+            detail: error.message || "開啟翻譯緩存管理器過程中發生錯誤",
             life: 3000
         });
     }
@@ -889,6 +908,14 @@ export function registerSettings() {
                     type: () => createServiceSelector('translate', '機械翻譯', { machineOnly: true })
                 },
 
+                {
+                    id: "PromptAssistant.Argos.LanguagePacks",
+                    name: "Argos 語言包",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "機械翻譯"],
+                    tooltip: "Argos 本地翻譯需安裝離線語言包。未安裝時可點擊「安裝」按鈕下載（首次需聯網，約數百 MB）。",
+                    type: () => ArgosLanguagePack.createSettingsRow()
+                },
+
                 // 使用翻译缓存功能
                 {
                     id: "PromptAssistant.Features.UseTranslateCache",
@@ -979,6 +1006,29 @@ export function registerSettings() {
                         cell.appendChild(importBtn);
                         cell.appendChild(fileInput);
                         row.appendChild(cell);
+                        return row;
+                    }
+                },
+
+                {
+                    id: "PromptAssistant.Settings.TranslateCacheManager",
+                    name: "翻譯緩存管理器",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "翻譯緩存"],
+                    tooltip: "開啟獨立視窗，檢視所有翻譯單字對應與完整緩存條目，支援搜尋與刪除",
+                    type: () => {
+                        const row = document.createElement("tr");
+                        row.className = "promptwidget-settings-row";
+
+                        const labelCell = document.createElement("td");
+                        labelCell.className = "comfy-menu-label";
+                        row.appendChild(labelCell);
+
+                        const buttonCell = document.createElement("td");
+                        const button = createLoadingButton("翻譯緩存管理器", async () => {
+                            showTranslateCacheModal();
+                        }, false);
+                        buttonCell.appendChild(button);
+                        row.appendChild(buttonCell);
                         return row;
                     }
                 },

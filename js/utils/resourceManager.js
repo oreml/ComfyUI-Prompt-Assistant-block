@@ -467,7 +467,8 @@ class ResourceManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Request-ID': reqId
+                    'X-Request-ID': reqId,
+                    'X-PA-Client': APIService.getClientId()
                 },
                 body: bodyStr
             });
@@ -538,7 +539,8 @@ class ResourceManager {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-Request-ID': reqId
+                    'X-Request-ID': reqId,
+                    'X-PA-Client': APIService.getClientId()
                 },
                 body: bodyStr
             });
@@ -675,24 +677,24 @@ class ResourceManager {
      * 保存用户自定义标签数据
      */
     static async saveUserTags(data) {
-        try {
-            const response = await fetch(APIService.getApiUrl('/config/tags_user'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const result = await response.json();
-            if (result.success) {
-                logger.log("用户标签数据保存成功");
-                this.#userTagCache = data; // 更新缓存
-                return true;
-            }
-            logger.error(`保存用户标签数据失败 | ${result.error}`);
-            return false;
-        } catch (error) {
-            logger.error(`保存用户标签数据失败 | ${error.message}`);
+        const payload = data ?? this.#userTagCache ?? { favorites: [] };
+        if (!payload || typeof payload !== 'object') {
+            logger.warn('[saveUserTags] 跳過：資料無效');
             return false;
         }
+        const res = await APIService.postJson('/config/tags_user', payload);
+        if (!res.ok) {
+            logger.warn(`[saveUserTags] 服務端異常 | ${res.data?.error || res.status}`);
+            return false;
+        }
+        const result = res.data;
+        if (result.success) {
+            logger.log("用户标签数据保存成功");
+            this.#userTagCache = payload;
+            return true;
+        }
+        logger.error(`保存用户标签数据失败 | ${result.error}`);
+        return false;
     }
 
     /**

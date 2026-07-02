@@ -8,6 +8,15 @@ import { logger } from '../utils/logger.js';
 // 用于存储进行中的请求的AbortController
 const runningRequests = new Map();
 
+// 後端 boot_id（熱重載後會變更）
+let _knownServerBootId = null;
+let _serverBootWatcherStarted = false;
+
+/** 生成請求 ID */
+function _newRequestId() {
+    return `pa-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 // ---基础路由推断逻辑---
 // 自动获取当前插件的挂载点，消除硬编码路径
 // 通过解析当前脚本的 URL，提取出 extensions/ 后的目录名
@@ -69,6 +78,122 @@ class APIService {
         const url = `${window.location.origin}${fullPath}`;
         // logger.debug(`构建API URL: ${url}`);
         return url;
+    }
+
+    /**
+     * 本頁面會話 ID（用於後端辨識是否為本擴展前端發出的請求）
+     */
+    static getClientId() {
+        if (!window.__PA_CLIENT_ID) {
+            window.__PA_CLIENT_ID = _newRequestId();
+        }
+        return window.__PA_CLIENT_ID;
+    }
+
+    /**
+     * 統一 POST JSON：拒絕空 body，附帶 X-Request-ID / X-PA-Client
+     */
+    static async postJson(path, data, options = {}) {
+        if (data === undefined) {
+            logger.warn(`[postJson] 跳過 undefined body | path=${path}`);
+            return { ok: false, status: 0, data: { success: false, error: 'empty body skipped' } };
+        }
+        const bodyStr = JSON.stringify(data);
+        if (!bodyStr || bodyStr === 'undefined') {
+            logger.warn(`[postJson] 跳過空 body | path=${path}`);
+            return { ok: false, status: 0, data: { success: false, error: 'empty body skipped' } };
+        }
+        const reqId = options.requestId || _newRequestId();
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Request-ID': reqId,
+            'X-PA-Client': this.getClientId(),
+            ...(options.headers || {}),
+        };
+        try {
+            const response = await fetch(this.getApiUrl(path), {
+                method: 'POST',
+                headers,
+                body: bodyStr,
+                signal: options.signal,
+            });
+            const text = await response.text();
+            let parsed = {};
+            if (text) {
+                try {
+                    parsed = JSON.parse(text);
+                } catch {
+                    parsed = { success: false, error: text.slice(0, 200) };
+                }
+            }
+            return { ok: response.ok, status: response.status, data: parsed, requestId: reqId };
+        } catch (error) {
+            logger.warn(`[postJson] 請求失敗 | path=${path} | reqId=${reqId} | ${error.message}`);
+            return { ok: false, status: 0, data: { success: false, error: error.message }, requestId: reqId };
+        }
+    }
+
+    /**
+     * 取得後端 meta（version / boot_id）
+     */
+    static async fetchApiMeta() {
+        const response = await fetch(this.getApiUrl('/meta'));
+        if (!response.ok) {
+            throw new Error(`meta HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    /**
+     * 監聽後端熱重載：boot_id 變更時提示重新整理（比單純 Ctrl+Shift+R 更準確）
+     */
+    static startServerBootWatcher() {
+        if (_serverBootWatcherStarted) {
+            return;
+        }
+        _serverBootWatcherStarted = true;
+
+        const check = async () => {
+            try {
+                const meta = await this.fetchApiMeta();
+                const bootId = meta?.boot_id;
+                if (!bootId) {
+                    return;
+                }
+                if (_knownServerBootId === null) {
+                    _knownServerBootId = bootId;
+                    window.__PA_SERVER_BOOT_ID = bootId;
+                    return;
+                }
+                if (bootId !== _knownServerBootId) {
+                    _knownServerBootId = bootId;
+                    window.__PA_SERVER_BOOT_ID = bootId;
+                    const msg = '後端已熱重載，請重新整理頁面以同步前端狀態';
+                    logger.warn(`[serverBootWatcher] ${msg} | boot_id=${bootId}`);
+                    if (window.app?.extensionManager?.toast?.add) {
+                        window.app.extensionManager.toast.add({
+                            severity: 'warn',
+                            summary: '提示詞小助手',
+                            detail: msg,
+                            life: 12000,
+                        });
+                    } else {
+                        console.warn(`[PromptAssistant] ${msg}`);
+                    }
+                }
+            } catch {
+                // 後端尚未就緒或網路中斷，略過
+            }
+        };
+
+        check();
+        window.addEventListener('focus', () => check());
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                check();
+            }
+        });
+        setInterval(check, 30000);
     }
 
     /**
@@ -421,9 +546,6 @@ class APIService {
         }
     }
 
-    /**
-     * Argos Translate 本地翻譯 API
-     */
     static async argosTranslate(text, from = 'auto', to = 'zh', request_id = null, is_auto = false) {
         if (!request_id) {
             request_id = this.generateRequestId('trans', 'argos');
@@ -454,6 +576,42 @@ class APIService {
                 runningRequests.delete(request_id);
             }
         }
+    }
+
+    /** Argos 語言包狀態 */
+    static async argosStatus() {
+        const response = await fetch(this.getApiUrl('/argos/status'));
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    /** 安裝 Argos 語言包（多路由 fallback，避免熱重載未註冊 /argos/install 時 405） */
+    static async argosInstallLanguagePair(from, to) {
+        const attempts = [
+            { path: '/argos/status', body: { action: 'install', from, to } },
+            { path: '/argos/translate', body: { action: 'install', from, to, request_id: `install-${Date.now()}` } },
+            { path: '/argos/install', body: { from, to } },
+        ];
+        let lastError = null;
+        for (const { path, body } of attempts) {
+            const res = await this.postJson(path, body);
+            if (res.ok && res.data?.success) {
+                window.dispatchEvent(new CustomEvent('pa-argos-langpack-changed'));
+                return res.data;
+            }
+            if (res.status === 405) {
+                lastError = `405: ${path}`;
+                continue;
+            }
+            throw new Error(res.data?.error || `安裝失敗 (${res.status})`);
+        }
+        throw new Error(
+            lastError
+                ? `${lastError} — 請完整重啟 ComfyUI 後再試`
+                : '安裝失敗，請完整重啟 ComfyUI 後再試'
+        );
     }
 
     /**

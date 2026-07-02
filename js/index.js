@@ -15,6 +15,7 @@ import { HistoryCacheService, TagCacheService } from './services/cache.js';
 import { imageCaption, ImageCaption } from './modules/imageCaption.js';
 import { nodeHelpTranslator } from './modules/nodeHelpTranslator.js';
 import { nodeMountService, RENDER_MODE } from './services/NodeMountService.js';
+import { APIService } from './services/api.js';
 import './node/captionFrame.js'; // 导入视频手动抽帧功能
 
 
@@ -48,6 +49,9 @@ app.registerExtension({
         try {
             // 初始化节点挂载服务（需要在其他初始化之前）
             nodeMountService.initialize();
+
+            // 偵測後端熱重載，避免舊前端對已重啟後端發出無效 POST
+            APIService.startServerBootWatcher();
 
             // 注册渲染模式切换处理
             nodeMountService.onModeChange(async (newMode, oldMode) => {

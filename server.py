@@ -14,6 +14,9 @@ import asyncio
 import folder_paths
 import imageio
 import os
+import re
+import time
+import uuid
 from .utils.common import (
     # 统一日志前缀（从 common.py 导入）
     PREFIX, ERROR_PREFIX, PROCESS_PREFIX,
@@ -29,7 +32,22 @@ from .utils.video import extract_frame_by_index, get_video_frame_info
 NODE_DIR_NAME = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
 API_PREFIX = f'/{NODE_DIR_NAME}/api'
 
-# print(f"{PREFIX} API 路由已挂载至: {API_PREFIX}")
+# 每次 Python 模組載入（含熱重載）產生新 ID，供前端偵測後端是否已重啟
+_SERVER_BOOT_ID = uuid.uuid4().hex[:12]
+_EMPTY_BODY_LOG_LAST = {}
+_EMPTY_BODY_LOG_INTERVAL = 60.0
+
+
+def _get_extension_version():
+    try:
+        toml_path = os.path.join(os.path.dirname(__file__), "pyproject.toml")
+        with open(toml_path, "r", encoding="utf-8") as f:
+            match = re.search(r'version\s*=\s*"([^"]+)"', f.read())
+            if match:
+                return match.group(1)
+    except Exception:
+        pass
+    return "unknown"
 
 
 async def _read_json_body(request, endpoint_name=""):
@@ -40,13 +58,22 @@ async def _read_json_body(request, endpoint_name=""):
     body_bytes = await request.read()
     if not body_bytes:
         req_id = request.headers.get("X-Request-ID", "")
-        if not req_id:
-            print(f"{PREFIX} [{endpoint_name}] 非本擴展或舊緩存請求(空body)已忽略，建議強制刷新頁面 (Ctrl+Shift+R)")
-        else:
-            print(f"{WARN_PREFIX} [{endpoint_name}] 请求体为空 | X-Request-ID={req_id}")
+        pa_client = request.headers.get("X-PA-Client", "")
+        now = time.monotonic()
+        last = _EMPTY_BODY_LOG_LAST.get(endpoint_name, 0.0)
+        if now - last >= _EMPTY_BODY_LOG_INTERVAL:
+            _EMPTY_BODY_LOG_LAST[endpoint_name] = now
+            parts = [f"[{endpoint_name}] POST 空 body 已忽略"]
+            if req_id:
+                parts.append(f"X-Request-ID={req_id}")
+            if pa_client:
+                parts.append(f"X-PA-Client={pa_client}")
+            else:
+                parts.append("無 X-PA-Client（多為熱重載中斷連線或非本擴展請求）")
+            print(f"{WARN_PREFIX} {' | '.join(parts)}")
         return None, web.json_response({
             "success": False,
-            "error": "请求体为空。若为本扩展，请强制刷新页面 (Ctrl+Shift+R) 后重试。"
+            "error": "请求体为空（常见于后端热重载后连接中断）。请刷新页面后重试。"
         }, status=400)
     try:
         return json.loads(body_bytes.decode("utf-8")), None
@@ -96,6 +123,16 @@ def get_result_text(result):
     if 'text' in result and isinstance(result['text'], str):
         return result['text']
     return ''
+
+# ---元信息（前端偵測熱重載）---
+
+@PromptServer.instance.routes.get(f'{API_PREFIX}/meta')
+async def get_api_meta(request):
+    """返回擴展版本與本次後端啟動 ID（熱重載後會變更）"""
+    return web.json_response({
+        "version": _get_extension_version(),
+        "boot_id": _SERVER_BOOT_ID,
+    })
 
 # ---流式进度设置API---
 
@@ -1363,18 +1400,52 @@ async def baidu_translate(request):
         if request_id and request_id in ACTIVE_TASKS:
             del ACTIVE_TASKS[request_id]
 
+async def _argos_install_language_pair_response(from_code, to_code):
+    """安裝 Argos 語言包並回傳最新狀態"""
+    if not from_code or not to_code:
+        return web.json_response({
+            "success": False,
+            "error": "缺少參數 from / to",
+        }, status=400)
+    await ArgosTranslateService.install_language_pair(from_code, to_code)
+    status = ArgosTranslateService.get_status_info()
+    print(f"{PREFIX} Argos 語言包已安裝 | {from_code}→{to_code}")
+    return web.json_response({"success": True, **status})
+
 @PromptServer.instance.routes.get(f'{API_PREFIX}/argos/status')
 async def argos_translate_status(request):
     """Argos Translate 安裝狀態與已安裝語言包"""
     try:
-        from .services.argos import ARGOS_AVAILABLE, ArgosTranslateService
-        pairs = ArgosTranslateService.get_installed_language_pairs() if ARGOS_AVAILABLE else []
-        return web.json_response({
-            "available": ARGOS_AVAILABLE,
-            "installed_pairs": [{"from": a, "to": b} for a, b in pairs],
-        })
+        status = ArgosTranslateService.get_status_info()
+        return web.json_response(status)
     except Exception as e:
         return web.json_response({"available": False, "error": str(e)}, status=500)
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/argos/status')
+async def argos_status_post(request):
+    """Argos 狀態相關 POST（含語言包安裝）"""
+    try:
+        data, err = await _read_json_body(request, "argos/status")
+        if err is not None:
+            return err
+        if data.get("action") == "install":
+            return await _argos_install_language_pair_response(data.get("from"), data.get("to"))
+        return web.json_response({"success": False, "error": "未知 action"}, status=400)
+    except Exception as e:
+        print(f"{ERROR_PREFIX} Argos 語言包安裝失敗 | 錯誤:{e}")
+        return web.json_response({"success": False, "error": str(e)}, status=500)
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/argos/install')
+async def argos_install_language_package(request):
+    """安裝 Argos 語言包（from / to 語言碼，如 en、zh）"""
+    try:
+        data, err = await _read_json_body(request, "argos/install")
+        if err is not None:
+            return err
+        return await _argos_install_language_pair_response(data.get("from"), data.get("to"))
+    except Exception as e:
+        print(f"{ERROR_PREFIX} Argos 語言包安裝失敗 | 錯誤:{e}")
+        return web.json_response({"success": False, "error": str(e)}, status=500)
 
 @PromptServer.instance.routes.post(f'{API_PREFIX}/argos/translate')
 async def argos_translate(request):
@@ -1382,6 +1453,8 @@ async def argos_translate(request):
     request_id = None
     try:
         data = await request.json()
+        if data.get("action") == "install":
+            return await _argos_install_language_pair_response(data.get("from"), data.get("to"))
         text = data.get("text")
         from_lang = data.get("from", "auto")
         to_lang = data.get("to", "zh")

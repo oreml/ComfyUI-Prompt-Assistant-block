@@ -15,6 +15,7 @@ import { ResourceManager } from "../utils/resourceManager.js";
 import { UIToolkit } from "../utils/UIToolkit.js";
 import { PromptFormatter } from "../utils/promptFormatter.js";
 import { APIService } from "../services/api.js";
+import { ArgosLanguagePack, parseMissingPair } from "./argosLanguagePack.js";
 
 import { buttonMenu } from "../services/btnMenu.js";
 import { rulesConfigManager } from "./rulesConfigManager.js";
@@ -2081,6 +2082,7 @@ class PromptAssistant {
                 icon: 'icon-translate',
                 onClick: async (e, widget) => {
                     logger.debug('按钮点击 | 動作: 翻譯');
+                    const translateButton = e.currentTarget;
 
                     // 如果按钮处于 processing 狀態且被点击，直接返回，
                     // 讓UIToolkit中的取消逻辑接管
@@ -2213,12 +2215,13 @@ class PromptAssistant {
                                 // 獲取翻譯服務配置
                                 let result;
                                 let streamContent = '';  // 用于流式收集内容
+                                let isArgos = false;
                                 try {
                                     // 獲取翻譯配置
                                     const configResp = await fetch(APIService.getApiUrl('/config/translate'));
                                     let isGoogle = false;
                                     let isBaidu = false;
-                                    let isArgos = false;
+                                    isArgos = false;
 
                                     if (configResp.ok) {
                                         const config = await configResp.json();
@@ -2284,6 +2287,25 @@ class PromptAssistant {
                                     throw new Error(`翻譯失敗: ${error.message}`);
                                 }
 
+                                if (!result.success && isArgos) {
+                                    const missingPair = parseMissingPair(result.error || '');
+                                    if (missingPair) {
+                                        const installed = await ArgosLanguagePack.promptAndInstall(
+                                            missingPair.from,
+                                            missingPair.to,
+                                            translateButton
+                                        );
+                                        if (installed) {
+                                            result = await APIService.argosTranslate(
+                                                contentToTranslate,
+                                                langResult.from,
+                                                langResult.to,
+                                                request_id
+                                            );
+                                        }
+                                    }
+                                }
+
                                 if (result.success) {
                                     // 格式化翻譯结果（优先使用流式收集的内容，否則使用API返回的内容）
                                     const rawTranslated = streamContent || result.data?.translated || '';
@@ -2336,11 +2358,9 @@ class PromptAssistant {
                                         tipMessage: '翻譯完成'
                                     };
                                 } else {
-                                    // 不在這裡顯示錯誤提示，直接拋出錯誤讓 handleAsyncButtonOperation 處理
-                                    throw new Error(result.error);
+                                    throw new Error(result.error || '翻譯失敗');
                                 }
                             } catch (error) {
-                                // 不在這裡顯示錯誤提示，直接拋出錯誤讓 handleAsyncButtonOperation 處理
                                 throw error;
                             }
                         }
