@@ -1079,6 +1079,33 @@ class TranslateCacheService {
     static _initPromise = null;
     static _syncTimer = null;
     static _isHydrating = false;
+    static _syncState = {
+        status: "idle", // idle | pending | syncing | success | error
+        lastSyncAt: 0,
+        error: "",
+    };
+
+    static _emitSyncState() {
+        try {
+            window.dispatchEvent(new CustomEvent("pa-translate-cache-sync", {
+                detail: this.getSyncStatus(),
+            }));
+        } catch {
+            // ignore event dispatch failures
+        }
+    }
+
+    static _setSyncState(partial) {
+        this._syncState = {
+            ...this._syncState,
+            ...partial,
+        };
+        this._emitSyncState();
+    }
+
+    static getSyncStatus() {
+        return { ...this._syncState };
+    }
 
     static _trimCacheToLimit(cache) {
         if (!(cache instanceof Map)) {
@@ -1098,16 +1125,41 @@ class TranslateCacheService {
         if (this._syncTimer) {
             clearTimeout(this._syncTimer);
         }
+        this._setSyncState({ status: "pending", error: "" });
         this._syncTimer = setTimeout(async () => {
             this._syncTimer = null;
-            try {
-                const cache = this.getAllTranslateCache();
-                await APIService.saveTranslateCacheConfig(Object.fromEntries(cache));
-                logger.debug(`翻译缓存 | 后端同步成功 | 数量:${cache.size}`);
-            } catch (error) {
-                logger.warn(`翻译缓存 | 后端同步失败 | ${error.message}`);
-            }
+            await this.forcePersistToBackend();
         }, 1200);
+    }
+
+    static async forcePersistToBackend() {
+        if (this._isHydrating) {
+            return false;
+        }
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+            this._syncTimer = null;
+        }
+        try {
+            this._setSyncState({ status: "syncing", error: "" });
+            const cache = this.getAllTranslateCache();
+            await APIService.saveTranslateCacheConfig(Object.fromEntries(cache));
+            const now = Date.now();
+            this._setSyncState({
+                status: "success",
+                lastSyncAt: now,
+                error: "",
+            });
+            logger.debug(`翻译缓存 | 后端同步成功 | 数量:${cache.size}`);
+            return true;
+        } catch (error) {
+            this._setSyncState({
+                status: "error",
+                error: error.message || "unknown error",
+            });
+            logger.warn(`翻译缓存 | 后端同步失败 | ${error.message}`);
+            return false;
+        }
     }
 
     static async initializePersistentCache() {
@@ -1127,9 +1179,14 @@ class TranslateCacheService {
                 this.saveAllTranslateCache(trimmedCache);
                 this._isHydrating = false;
                 this._schedulePersistToBackend();
+                this._setSyncState({ status: "pending", error: "" });
                 logger.log(`翻译缓存 | 持久化初始化完成 | 本地:${localCache.size} | 后端:${remoteCache.size} | 合并后:${trimmedCache.size}`);
             } catch (error) {
                 this._isHydrating = false;
+                this._setSyncState({
+                    status: "error",
+                    error: error.message || "initialize failed",
+                });
                 logger.warn(`翻译缓存 | 持久化初始化失败，继续使用本地缓存 | ${error.message}`);
             }
         })();
