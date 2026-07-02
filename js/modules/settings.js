@@ -119,16 +119,12 @@ const serviceSelector = {
         if (!config) return false;
 
         try {
-            const response = await fetch(APIService.getApiUrl('/services/current'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    service_type: config.serviceType,
-                    service_id: serviceId
-                })
+            const res = await APIService.postJson('/services/current', {
+                service_type: config.serviceType,
+                service_id: serviceId
             });
 
-            if (response.ok) {
+            if (res.ok) {
                 logger.log(`${config.name}服務切換 | 服務 ID: ${serviceId}`);
 
                 // 派發全域事件通知其他組件同步

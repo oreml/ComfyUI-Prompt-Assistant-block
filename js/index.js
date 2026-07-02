@@ -51,6 +51,7 @@ app.registerExtension({
             nodeMountService.initialize();
 
             // 偵測後端熱重載，避免舊前端對已重啟後端發出無效 POST
+            APIService.getClientId();
             APIService.startServerBootWatcher();
 
             // 注册渲染模式切换处理

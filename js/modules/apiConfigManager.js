@@ -46,6 +46,20 @@ class APIConfigManager {
     }
 
     /**
+     * 統一 POST JSON（附帶 X-PA-Client，拒絕空 body）
+     */
+    async _postJson(path, data) {
+        const res = await APIService.postJson(path, data);
+        if (res.status === 0) {
+            return null;
+        }
+        if (!res.ok) {
+            throw new Error(res.data?.error || `請求失敗 (${res.status})`);
+        }
+        return res.data;
+    }
+
+    /**
      * 显示API配置弹窗
      */
     async showAPIConfigModal() {
@@ -168,12 +182,7 @@ class APIConfigManager {
      */
     async _saveAllConfigs() {
         try {
-            // 保存百度翻译配置
-            await fetch(APIService.getApiUrl('/config/baidu_translate'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.baiduConfig)
-            });
+            await this._postJson('/config/baidu_translate', this.baiduConfig ?? {});
 
             app.extensionManager.toast.add({
                 severity: "success",
@@ -197,11 +206,7 @@ class APIConfigManager {
      */
     async _saveBaiduConfig() {
         try {
-            await fetch(APIService.getApiUrl('/config/baidu_translate'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.baiduConfig)
-            });
+            await this._postJson('/config/baidu_translate', this.baiduConfig ?? {});
 
             logger.debug('百度翻译配置已保存');
 
@@ -610,21 +615,15 @@ class APIConfigManager {
                     }
 
                     // 创建服务商
-                    const res = await fetch(APIService.getApiUrl('/services'), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            type: 'openai_compatible',
-                            name: serviceName,
-                            description: serviceDescription,
-                            base_url: 'https://api.example.com/v1',
-                            api_key: ''
-                        })
+                    const result = await this._postJson('/services', {
+                        type: 'openai_compatible',
+                        name: serviceName,
+                        description: serviceDescription,
+                        base_url: 'https://api.example.com/v1',
+                        api_key: ''
                     });
 
-                    const result = await res.json();
-
-                    if (result.success) {
+                    if (result?.success) {
                         app.extensionManager.toast.add({
                             severity: "success",
                             summary: "新服务商已创建",
@@ -715,11 +714,7 @@ class APIConfigManager {
      */
     async _saveGoogleConfig() {
         try {
-            await fetch(APIService.getApiUrl('/config/google_translate'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(this.googleConfig)
-            });
+            await this._postJson('/config/google_translate', this.googleConfig ?? {});
             logger.debug('Google 翻译配置已保存');
             this.notifyConfigChange();
             app.extensionManager.toast.add({
@@ -943,21 +938,15 @@ class APIConfigManager {
     async _addNewServiceTab(navContainer, contentContainer) {
         // 调用后端API创建新服务商
         try {
-            const res = await fetch(APIService.getApiUrl('/services'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'openai_compatible',
-                    name: '新服务商',
-                    description: '',
-                    base_url: 'https://api.example.com/v1',
-                    api_key: ''
-                })
+            const result = await this._postJson('/services', {
+                type: 'openai_compatible',
+                name: '新服务商',
+                description: '',
+                base_url: 'https://api.example.com/v1',
+                api_key: ''
             });
 
-            const result = await res.json();
-
-            if (result.success) {
+            if (result?.success) {
                 app.extensionManager.toast.add({
                     severity: "success",
                     summary: "新服务商已创建",
@@ -1801,21 +1790,15 @@ class APIConfigManager {
     async _addModel(service, modelType, modelName, container) {
         try {
             // 调用后端API添加模型
-            const res = await fetch(APIService.getApiUrl(`/services/${service.id}/models`), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    model_type: modelType,
-                    model_name: modelName,
-                    temperature: 0.7,
-                    top_p: 0.9,
-                    max_tokens: 1024
-                })
+            const result = await this._postJson(`/services/${service.id}/models`, {
+                model_type: modelType,
+                model_name: modelName,
+                temperature: 0.7,
+                top_p: 0.9,
+                max_tokens: 1024
             });
 
-            const result = await res.json();
-
-            if (!result.success) {
+            if (!result?.success) {
                 throw new Error(result.error || '添加模型失败');
             }
 

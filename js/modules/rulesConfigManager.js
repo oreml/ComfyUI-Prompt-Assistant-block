@@ -1565,14 +1565,9 @@ class RulesConfigManager {
             logger.debug(`最终激活的规则ID: expand=${systemPrompts.active_prompts.expand}, vision_zh=${systemPrompts.active_prompts.vision_zh}, vision_en=${systemPrompts.active_prompts.vision_en}, video=${systemPrompts.active_prompts.video}`);
 
 
-            const response = await fetch(APIService.getApiUrl('/config/system_prompts'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(systemPrompts)
-            });
-
-            if (!response.ok) {
-                throw new Error(`保存失败: ${response.status} ${response.statusText}`);
+            const res = await APIService.postJson('/config/system_prompts', systemPrompts);
+            if (!res.ok) {
+                throw new Error(res.data?.error || `保存失败: ${res.status}`);
             }
 
             logger.debug('配置已成功保存到服务器');

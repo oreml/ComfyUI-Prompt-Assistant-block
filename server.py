@@ -59,18 +59,18 @@ async def _read_json_body(request, endpoint_name=""):
     if not body_bytes:
         req_id = request.headers.get("X-Request-ID", "")
         pa_client = request.headers.get("X-PA-Client", "")
-        now = time.monotonic()
-        last = _EMPTY_BODY_LOG_LAST.get(endpoint_name, 0.0)
-        if now - last >= _EMPTY_BODY_LOG_INTERVAL:
-            _EMPTY_BODY_LOG_LAST[endpoint_name] = now
-            parts = [f"[{endpoint_name}] POST 空 body 已忽略"]
-            if req_id:
-                parts.append(f"X-Request-ID={req_id}")
-            if pa_client:
-                parts.append(f"X-PA-Client={pa_client}")
-            else:
-                parts.append("無 X-PA-Client（多為熱重載中斷連線或非本擴展請求）")
-            print(f"{WARN_PREFIX} {' | '.join(parts)}")
+        # 無本擴展標記的多為熱重載殘留請求，靜默忽略避免刷屏
+        if req_id or pa_client:
+            now = time.monotonic()
+            last = _EMPTY_BODY_LOG_LAST.get(endpoint_name, 0.0)
+            if now - last >= _EMPTY_BODY_LOG_INTERVAL:
+                _EMPTY_BODY_LOG_LAST[endpoint_name] = now
+                parts = [f"[{endpoint_name}] POST 空 body 已忽略"]
+                if req_id:
+                    parts.append(f"X-Request-ID={req_id}")
+                if pa_client:
+                    parts.append(f"X-PA-Client={pa_client}")
+                print(f"{WARN_PREFIX} {' | '.join(parts)}")
         return None, web.json_response({
             "success": False,
             "error": "请求体为空（常见于后端热重载后连接中断）。请刷新页面后重试。"
@@ -1037,7 +1037,9 @@ async def remove_favorite(request):
 async def update_google_translate_config(request):
     """更新 Google 翻译配置"""
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "config/google_translate")
+        if err is not None:
+            return err
         api_key = data.get('api_key')
         success = config_manager.update_google_translate_config(api_key=api_key)
         if success:
@@ -1051,7 +1053,9 @@ async def update_google_translate_config(request):
 async def update_baidu_translate_config(request):
     """更新百度翻译配置"""
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "config/baidu_translate")
+        if err is not None:
+            return err
         app_id = data.get('app_id')
         secret_key = data.get('secret_key')
         
@@ -1085,7 +1089,9 @@ async def update_baidu_translate_config(request):
 async def update_system_prompts_config(request):
     """更新系统提示词配置"""
     try:
-        data = await request.json()
+        data, err = await _read_json_body(request, "config/system_prompts")
+        if err is not None:
+            return err
         
         # 检查数据结构是否正确
         if not isinstance(data, dict):
