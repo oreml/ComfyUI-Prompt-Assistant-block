@@ -183,6 +183,69 @@ async def get_translate_config(request):
     config = config_manager.get_translate_config()
     return web.json_response(config)
 
+@PromptServer.instance.routes.get(f'{API_PREFIX}/config/translate_cache')
+async def get_translate_cache_config(request):
+    """获取持久化翻译缓存"""
+    try:
+        cache = config_manager.load_translate_cache()
+        return web.json_response({
+            "success": True,
+            "cache": cache,
+            "total": len(cache)
+        })
+    except Exception as e:
+        print(f"{ERROR_PREFIX} 读取翻译缓存失败 | 错误:{str(e)}")
+        return web.json_response({
+            "success": False,
+            "error": str(e),
+            "cache": {}
+        }, status=500)
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/config/translate_cache')
+async def save_translate_cache_config(request):
+    """保存持久化翻译缓存"""
+    try:
+        data, err = await _read_json_body(request, "config/translate_cache")
+        if err is not None:
+            return err
+
+        # 兼容两种格式：
+        # 1) { cache: { "source": "translated" } }
+        # 2) 直接传入 { "source": "translated" }
+        cache_data = data.get("cache") if isinstance(data, dict) and "cache" in data else data
+        if not isinstance(cache_data, dict):
+            return web.json_response({
+                "success": False,
+                "error": "cache 必须是对象"
+            }, status=400)
+
+        normalized = {}
+        for key, value in cache_data.items():
+            if key is None or value is None:
+                continue
+            k = str(key).strip()
+            v = str(value).strip()
+            if k and v:
+                normalized[k] = v
+
+        success = config_manager.save_translate_cache(normalized)
+        if not success:
+            return web.json_response({
+                "success": False,
+                "error": "保存失败"
+            }, status=500)
+
+        return web.json_response({
+            "success": True,
+            "total": len(normalized)
+        })
+    except Exception as e:
+        print(f"{ERROR_PREFIX} 保存翻译缓存失败 | 错误:{str(e)}")
+        return web.json_response({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
 @PromptServer.instance.routes.post(f'{API_PREFIX}/config/translate/target_chinese')
 async def set_translate_target_chinese_api(request):
     """設置翻譯目標中文：繁中(zh-TW) 或 簡中(zh-CN)"""

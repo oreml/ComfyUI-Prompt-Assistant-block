@@ -145,6 +145,28 @@ class APIService {
     }
 
     /**
+     * 讀取後端持久化翻譯緩存
+     */
+    static async getTranslateCacheConfig() {
+        const response = await fetch(this.getApiUrl('/config/translate_cache'));
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    /**
+     * 保存後端持久化翻譯緩存
+     */
+    static async saveTranslateCacheConfig(cache = {}) {
+        const result = await this.postJson('/config/translate_cache', { cache });
+        if (!result.ok || !result.data?.success) {
+            throw new Error(result.data?.error || `HTTP ${result.status}`);
+        }
+        return result.data;
+    }
+
+    /**
      * 監聽後端熱重載：boot_id 變更時提示重新整理（比單純 Ctrl+Shift+R 更準確）
      */
     static startServerBootWatcher() {

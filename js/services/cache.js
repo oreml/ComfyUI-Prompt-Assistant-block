@@ -5,6 +5,7 @@
 
 import { logger } from '../utils/logger.js';
 import { PromptFormatter } from "../utils/promptFormatter.js";
+import { APIService } from "./api.js";
 
 // ---缓存配置---
 const CACHE_CONFIG = {
@@ -1075,6 +1076,66 @@ class TagCacheService {
  * 管理翻译结果的缓存操作
  */
 class TranslateCacheService {
+    static _initPromise = null;
+    static _syncTimer = null;
+    static _isHydrating = false;
+
+    static _trimCacheToLimit(cache) {
+        if (!(cache instanceof Map)) {
+            return new Map();
+        }
+        if (cache.size <= CACHE_CONFIG.MAX_TRANSLATE_CACHE) {
+            return cache;
+        }
+        const entries = Array.from(cache.entries()).slice(-CACHE_CONFIG.MAX_TRANSLATE_CACHE);
+        return new Map(entries);
+    }
+
+    static _schedulePersistToBackend() {
+        if (this._isHydrating) {
+            return;
+        }
+        if (this._syncTimer) {
+            clearTimeout(this._syncTimer);
+        }
+        this._syncTimer = setTimeout(async () => {
+            this._syncTimer = null;
+            try {
+                const cache = this.getAllTranslateCache();
+                await APIService.saveTranslateCacheConfig(Object.fromEntries(cache));
+                logger.debug(`翻译缓存 | 后端同步成功 | 数量:${cache.size}`);
+            } catch (error) {
+                logger.warn(`翻译缓存 | 后端同步失败 | ${error.message}`);
+            }
+        }, 1200);
+    }
+
+    static async initializePersistentCache() {
+        if (this._initPromise) {
+            return this._initPromise;
+        }
+        this._initPromise = (async () => {
+            try {
+                this._isHydrating = true;
+                const localCache = this.getAllTranslateCache();
+                const remoteResult = await APIService.getTranslateCacheConfig();
+                const remoteCache = new Map(Object.entries(remoteResult?.cache || {}));
+
+                // 合并策略：后端为基础，本地覆盖（兼容本地近期尚未上传的条目）
+                const mergedCache = new Map([...remoteCache, ...localCache]);
+                const trimmedCache = this._trimCacheToLimit(mergedCache);
+                this.saveAllTranslateCache(trimmedCache);
+                this._isHydrating = false;
+                this._schedulePersistToBackend();
+                logger.log(`翻译缓存 | 持久化初始化完成 | 本地:${localCache.size} | 后端:${remoteCache.size} | 合并后:${trimmedCache.size}`);
+            } catch (error) {
+                this._isHydrating = false;
+                logger.warn(`翻译缓存 | 持久化初始化失败，继续使用本地缓存 | ${error.message}`);
+            }
+        })();
+        return this._initPromise;
+    }
+
     /**
      * 获取所有翻译缓存
      */
@@ -1096,9 +1157,11 @@ class TranslateCacheService {
      */
     static saveAllTranslateCache(cache) {
         try {
+            const finalCache = this._trimCacheToLimit(cache);
             // 将Map转换为普通对象
-            const data = Object.fromEntries(cache);
+            const data = Object.fromEntries(finalCache);
             CacheService.set(CACHE_CONFIG.TRANSLATE_CACHE_KEY, data);
+            this._schedulePersistToBackend();
         } catch (error) {
             logger.error(`翻译缓存 | 保存缓存失败 | 错误:${error.message}`);
         }
@@ -1122,18 +1185,10 @@ class TranslateCacheService {
             cache.set(sourceText, translatedText);
 
             // 如果缓存过大，删除最旧的条目
-            if (cache.size > CACHE_CONFIG.MAX_TRANSLATE_CACHE) {
-                // 将Map转换为数组以便操作
-                const entries = Array.from(cache.entries());
-                // 删除最早的条目，保留最新的MAX_TRANSLATE_CACHE条
-                const newEntries = entries.slice(-CACHE_CONFIG.MAX_TRANSLATE_CACHE);
-                // 重建缓存
-                cache.clear();
-                newEntries.forEach(([key, value]) => cache.set(key, value));
-            }
+            const trimmed = this._trimCacheToLimit(cache);
 
             // 保存缓存
-            this.saveAllTranslateCache(cache);
+            this.saveAllTranslateCache(trimmed);
             logger.debug(`翻译缓存 | 添加缓存 | 原文长度:${sourceText.length} | 译文长度:${translatedText.length}`);
             return true;
         } catch (error) {
@@ -1189,6 +1244,7 @@ class TranslateCacheService {
     static clearAllTranslateCache() {
         try {
             CacheService.remove(CACHE_CONFIG.TRANSLATE_CACHE_KEY);
+            this._schedulePersistToBackend();
             logger.debug("翻译缓存 | 清除所有缓存");
         } catch (error) {
             logger.error(`翻译缓存 | 清除缓存失败 | 错误:${error.message}`);
@@ -1350,13 +1406,7 @@ class TranslateCacheService {
             });
 
             if (imported > 0) {
-                if (cache.size > CACHE_CONFIG.MAX_TRANSLATE_CACHE) {
-                    const entries = Array.from(cache.entries());
-                    const newEntries = entries.slice(-CACHE_CONFIG.MAX_TRANSLATE_CACHE);
-                    cache.clear();
-                    newEntries.forEach(([key, value]) => cache.set(key, value));
-                }
-                this.saveAllTranslateCache(cache);
+                this.saveAllTranslateCache(this._trimCacheToLimit(cache));
                 logger.debug(`翻译缓存 | 导入单字翻译 | 导入数量:${imported}`);
             }
 

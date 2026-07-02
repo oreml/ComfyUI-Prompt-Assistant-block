@@ -11,7 +11,7 @@ import { EventManager } from './utils/eventManager.js';
 import { ResourceManager } from './utils/resourceManager.js';
 import { UIToolkit } from "./utils/UIToolkit.js";
 import { logger } from './utils/logger.js';
-import { HistoryCacheService, TagCacheService } from './services/cache.js';
+import { HistoryCacheService, TagCacheService, TranslateCacheService } from './services/cache.js';
 import { imageCaption, ImageCaption } from './modules/imageCaption.js';
 import { nodeHelpTranslator } from './modules/nodeHelpTranslator.js';
 import { nodeMountService, RENDER_MODE } from './services/NodeMountService.js';
@@ -53,6 +53,7 @@ app.registerExtension({
             // 偵測後端熱重載，避免舊前端對已重啟後端發出無效 POST
             APIService.getClientId();
             APIService.startServerBootWatcher();
+            TranslateCacheService.initializePersistentCache();
 
             // 注册渲染模式切换处理
             nodeMountService.onModeChange(async (newMode, oldMode) => {

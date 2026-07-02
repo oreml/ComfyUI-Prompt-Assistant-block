@@ -43,6 +43,7 @@ class ConfigManager:
         self.active_prompts_path = os.path.join(self.config_dir, "active_prompts.json")
         self.tags_user_path = os.path.join(self.config_dir, "tags_user.json")
         self.tags_selection_path = os.path.join(self.config_dir, "tags_selection.json")
+        self.translate_cache_path = os.path.join(self.config_dir, "translate_cache.json")
         
         # 规则文件路径（规则定义和模板）
         self.system_prompts_path = os.path.join(self.rules_dir, "system_prompts.json")
@@ -307,6 +308,34 @@ class ConfigManager:
     def save_user_tags(self, user_tags):
         """保存用户标签配置"""
         return self._atomic_write_json(self.tags_user_path, user_tags)
+
+    def load_translate_cache(self) -> dict:
+        """加载翻译缓存配置（source -> translated）"""
+        try:
+            if not os.path.exists(self.translate_cache_path):
+                return {}
+            with open(self.translate_cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, dict):
+                return {}
+            normalized = {}
+            for key, value in data.items():
+                if key is None or value is None:
+                    continue
+                key_str = str(key).strip()
+                val_str = str(value).strip()
+                if key_str and val_str:
+                    normalized[key_str] = val_str
+            return normalized
+        except Exception as e:
+            self._log(f"加载翻译缓存失败: {str(e)}")
+            return {}
+
+    def save_translate_cache(self, translate_cache: dict) -> bool:
+        """保存翻译缓存配置（source -> translated）"""
+        if not isinstance(translate_cache, dict):
+            return False
+        return self._atomic_write_json(self.translate_cache_path, translate_cache)
 
     def load_kontext_presets(self):
         """加载Kontext预设配置"""
