@@ -1005,6 +1005,55 @@ export function registerSettings() {
                         return row;
                     }
                 },
+                {
+                    id: "PromptAssistant.Settings.TranslateCachePersistPath",
+                    name: "持久化儲存路徑",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "翻譯緩存"],
+                    tooltip: "顯示後端翻譯緩存 JSON 檔案位置",
+                    type: () => {
+                        const row = document.createElement("tr");
+                        row.className = "promptwidget-settings-row";
+
+                        const labelCell = document.createElement("td");
+                        labelCell.className = "comfy-menu-label";
+                        row.appendChild(labelCell);
+
+                        const cell = document.createElement("td");
+                        cell.style.display = "flex";
+                        cell.style.gap = "8px";
+                        cell.style.flexDirection = "column";
+                        cell.style.alignItems = "flex-start";
+
+                        const pathText = document.createElement("div");
+                        pathText.style.fontSize = "12px";
+                        pathText.style.wordBreak = "break-all";
+                        pathText.style.color = "var(--p-text-muted-color)";
+                        pathText.textContent = "載入中...";
+
+                        const refreshBtn = document.createElement("button");
+                        refreshBtn.className = "comfy-btn";
+                        refreshBtn.type = "button";
+                        refreshBtn.textContent = "重新整理路徑";
+
+                        const loadPath = async () => {
+                            try {
+                                const res = await APIService.getTranslateCacheConfig();
+                                const path = res?.path || "未提供（請確認後端已更新）";
+                                pathText.textContent = path;
+                            } catch (err) {
+                                pathText.textContent = `讀取失敗：${err.message}`;
+                            }
+                        };
+
+                        refreshBtn.onclick = loadPath;
+                        loadPath();
+
+                        cell.appendChild(pathText);
+                        cell.appendChild(refreshBtn);
+                        row.appendChild(cell);
+                        return row;
+                    }
+                },
 
                 {
                     id: "PromptAssistant.Settings.TranslateCacheManager",

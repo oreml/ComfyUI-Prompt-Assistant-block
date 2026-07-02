@@ -191,7 +191,8 @@ async def get_translate_cache_config(request):
         return web.json_response({
             "success": True,
             "cache": cache,
-            "total": len(cache)
+            "total": len(cache),
+            "path": getattr(config_manager, "translate_cache_path", "")
         })
     except Exception as e:
         print(f"{ERROR_PREFIX} 读取翻译缓存失败 | 错误:{str(e)}")
