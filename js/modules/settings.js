@@ -15,6 +15,7 @@ import { FEATURES, handleFeatureChange } from "../services/features.js";
 import { APIService } from "../services/api.js";
 
 import { apiConfigManager } from "./apiConfigManager.js";
+import { machineTranslateConfigManager } from "./machineTranslateConfigManager.js";
 import { rulesConfigManager } from "./rulesConfigManager.js";
 import { ArgosLanguagePack } from "./argosLanguagePack.js";
 import { translateCacheManager } from "./translateCacheManager.js";
@@ -323,6 +324,23 @@ function showTranslateCacheModal() {
             severity: "error",
             summary: "開啟失敗",
             detail: error.message || "開啟翻譯緩存管理器過程中發生錯誤",
+            life: 3000
+        });
+    }
+}
+
+/**
+ * 顯示機械翻譯 API 配置彈窗
+ */
+function showMachineTranslateConfigModal() {
+    try {
+        machineTranslateConfigManager.showMachineTranslateConfigModal();
+    } catch (error) {
+        logger.error(`開啟機械翻譯 API 配置失敗: ${error.message}`);
+        app.extensionManager?.toast?.add?.({
+            severity: "error",
+            summary: "開啟配置失敗",
+            detail: error.message || "開啟機械翻譯 API 配置過程中發生錯誤",
             life: 3000
         });
     }
@@ -794,9 +812,9 @@ export function registerSettings() {
                 // API 配置按钮
                 {
                     id: "PromptAssistant.Features.APIConfig",
-                    name: "百度與大語言模型 API 配置",
+                    name: "大語言模型 API 配置",
                     category: ["✨提示詞小助手", " 配置", "API 配置"],
-                    tooltip: "配置或修改 API 資訊",
+                    tooltip: "配置 OpenRouter、Ollama 等大語言模型服務商 API",
                     type: () => {
                         const row = document.createElement("tr");
                         row.className = "promptwidget-settings-row";
@@ -806,7 +824,7 @@ export function registerSettings() {
                         row.appendChild(labelCell);
 
                         const buttonCell = document.createElement("td");
-                        const button = createLoadingButton("API管理器", async () => {
+                        const button = createLoadingButton("LLM API 管理器", async () => {
                             showAPIConfigModal();
                         }, false); // 設置 showSuccessToast 為 false
 
@@ -1146,6 +1164,28 @@ export function registerSettings() {
                         } catch (e) {
                             logger.error(`切換機械翻譯異常 | ${e.message}`);
                         }
+                    }
+                },
+                {
+                    id: "PromptAssistant.Features.MachineTranslateAPIConfig",
+                    name: "機械翻譯 API 配置",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "混合語言規則"],
+                    tooltip: "配置 Google、百度、DeepL、有道等機械翻譯 API 金鑰（與大語言模型 API 分開管理）",
+                    type: () => {
+                        const row = document.createElement("tr");
+                        row.className = "promptwidget-settings-row";
+
+                        const labelCell = document.createElement("td");
+                        labelCell.className = "comfy-menu-label";
+                        row.appendChild(labelCell);
+
+                        const buttonCell = document.createElement("td");
+                        const button = createLoadingButton("機械翻譯 API", async () => {
+                            showMachineTranslateConfigModal();
+                        }, false);
+                        buttonCell.appendChild(button);
+                        row.appendChild(buttonCell);
+                        return row;
                     }
                 },
 

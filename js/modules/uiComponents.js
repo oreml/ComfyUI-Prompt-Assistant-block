@@ -74,7 +74,7 @@ export function createSettingsDialog(options) {
 
         // 如果提供了额外的对话框类名，添加到modal
         if (dialogClassName) {
-            modal.classList.add(dialogClassName);
+            dialogClassName.split(/\s+/).filter(Boolean).forEach((cls) => modal.classList.add(cls));
         }
 
         // 如果是确认对话框，设置特殊样式

@@ -29,11 +29,6 @@ class APIConfigManager {
         // 服务商数据
         this.services = [];
         this.currentServices = { llm: null, vlm: null };
-
-        // Google 翻译配置（默认首选）
-        this.googleConfig = { api_key: '' };
-        // 百度翻译配置
-        this.baiduConfig = { app_id: '', secret_key: '' };
     }
 
     /**
@@ -67,7 +62,7 @@ class APIConfigManager {
             logger.debug('打开API配置弹窗 v2.0');
 
             createSettingsDialog({
-                title: '<i class="pi pi-cog" style="margin-right: 8px;"></i>API管理器',
+                title: '<i class="pi pi-cog" style="margin-right: 8px;"></i>大語言模型 API 管理器',
                 dialogClassName: 'api-config-dialog-v2',
                 disableBackdropAndCloseOnClickOutside: true,
                 hideFooter: true,  // 不显示底部的保存/取消按钮
@@ -145,14 +140,6 @@ class APIConfigManager {
                 });
             }
 
-            // 加载 Google 翻译配置
-            const googleRes = await fetch(APIService.getApiUrl('/config/google_translate'));
-            this.googleConfig = await googleRes.json();
-
-            // 加载百度翻译配置
-            const baiduRes = await fetch(APIService.getApiUrl('/config/baidu_translate'));
-            this.baiduConfig = await baiduRes.json();
-
             // 加载当前服务配置以获取current_services
             const llmRes = await fetch(APIService.getApiUrl('/config/llm'));
             const llmConfig = await llmRes.json();
@@ -181,53 +168,11 @@ class APIConfigManager {
      * 保存所有配置
      */
     async _saveAllConfigs() {
-        try {
-            await this._postJson('/config/baidu_translate', this.baiduConfig ?? {});
-
-            app.extensionManager.toast.add({
-                severity: "success",
-                summary: "配置已保存",
-                life: 3000
-            });
-        } catch (error) {
-            logger.error('保存配置失败', error);
-            app.extensionManager.toast.add({
-                severity: "error",
-                summary: "保存失败",
-                detail: error.message,
-                life: 3000
-            });
-            throw error;
-        }
-    }
-
-    /**
-     * 保存百度翻译配置
-     */
-    async _saveBaiduConfig() {
-        try {
-            await this._postJson('/config/baidu_translate', this.baiduConfig ?? {});
-
-            logger.debug('百度翻译配置已保存');
-
-            // 触发配置同步事件
-            this.notifyConfigChange();
-
-            // 显示成功提示
-            app.extensionManager.toast.add({
-                severity: "success",
-                summary: "百度翻译配置已保存",
-                life: 2000
-            });
-        } catch (error) {
-            logger.error('保存百度翻译配置失败', error);
-            app.extensionManager.toast.add({
-                severity: "error",
-                summary: "保存失败",
-                detail: error.message,
-                life: 3000
-            });
-        }
+        app.extensionManager.toast.add({
+            severity: "success",
+            summary: "配置已保存",
+            life: 3000
+        });
     }
 
     /**
@@ -246,14 +191,6 @@ class APIConfigManager {
         const tabContent = document.createElement('div');
         tabContent.className = 'tab-content';
 
-        // 创建 Google 翻译标签页（首位）
-        const googleContent = this._createGoogleTab();
-        tabContent.appendChild(googleContent);
-
-        // 创建百度翻译标签页
-        const baiduContent = this._createBaiduTab();
-        tabContent.appendChild(baiduContent);
-
         // 动态创建每个服务商的标签页内容
         this.services.forEach(service => {
             const serviceContent = this._createServiceContentTab(service);
@@ -263,8 +200,10 @@ class APIConfigManager {
         tabContainer.appendChild(tabContent);
         container.appendChild(tabContainer);
 
-        // 默认显示第一个标签页（Google 翻译）
-        this._switchTab('google', tabHeader, tabContent);
+        const defaultTabId = this.services[0]?.id;
+        if (defaultTabId) {
+            this._switchTab(defaultTabId, tabHeader, tabContent);
+        }
     }
 
     /**
@@ -273,14 +212,6 @@ class APIConfigManager {
     _createTabHeader() {
         const header = document.createElement('div');
         header.className = 'tab-header';
-
-        // Google 翻译标签（首位）
-        const googleTab = this._createTabButton('google', 'Google 翻译', '机器翻译');
-        header.appendChild(googleTab);
-
-        // 百度翻译标签
-        const baiduTab = this._createTabButton('baidu', '百度翻译', '机器翻译');
-        header.appendChild(baiduTab);
 
         // 动态创建服务商标签
         this.services.forEach(service => {
@@ -325,8 +256,7 @@ class APIConfigManager {
 
             buttons.forEach(btn => {
                 const tabId = btn.dataset.tab;
-                // 排除特殊标签(Google 翻译、百度翻译)
-                if (tabId && tabId !== 'google' && tabId !== 'baidu') {
+                if (tabId) {
                     serviceIds.push(tabId);
                 }
             });
@@ -408,7 +338,7 @@ class APIConfigManager {
         // 为服务商标签添加右键菜单（Google/百度翻译和预置服务商除外）
         // 预置服务商不可编辑/删除，只有用户自定义的服务商才能使用右键菜单
         const isPresetService = APIConfigManager.PRESET_SERVICE_IDS.includes(tabId);
-        if (tabId !== 'google' && tabId !== 'baidu' && !isPresetService) {
+        if (!isPresetService) {
             this._attachServiceContextMenu(button, tabId, title);
         }
 
@@ -671,116 +601,6 @@ class APIConfigManager {
                 }
             }
         });
-    }
-
-    /**
-     * 创建 Google 翻译标签页
-     */
-    _createGoogleTab() {
-        const pane = document.createElement('div');
-        pane.className = 'tab-pane';
-        pane.dataset.tab = 'google';
-
-        const section = createFormGroup('Google 翻译配置', [
-            { text: '开通 Google Cloud Translation API', url: 'https://cloud.google.com/translate/docs/setup' }
-        ]);
-        section.classList.add('google-translate-section');
-
-        const linkElement = section.querySelector('.settings-service-link');
-        if (linkElement) {
-            const icon = document.createElement('i');
-            icon.className = 'pi pi-star';
-            icon.style.marginRight = '4px';
-            linkElement.insertBefore(icon, linkElement.firstChild);
-        }
-
-        const apiKeyInput = createInputGroup('API Key', '请输入 Google Cloud Translation API Key');
-        apiKeyInput.input.type = 'password';
-        apiKeyInput.input.value = this.googleConfig.api_key || '';
-        apiKeyInput.input.addEventListener('input', (e) => {
-            this.googleConfig.api_key = e.target.value;
-        });
-        apiKeyInput.input.addEventListener('blur', async () => {
-            await this._saveGoogleConfig();
-        });
-
-        section.appendChild(apiKeyInput.group);
-        pane.appendChild(section);
-        return pane;
-    }
-
-    /**
-     * 保存 Google 翻译配置
-     */
-    async _saveGoogleConfig() {
-        try {
-            await this._postJson('/config/google_translate', this.googleConfig ?? {});
-            logger.debug('Google 翻译配置已保存');
-            this.notifyConfigChange();
-            app.extensionManager.toast.add({
-                severity: 'success',
-                summary: 'Google 翻译配置已保存',
-                life: 2000
-            });
-        } catch (error) {
-            logger.error('保存 Google 翻译配置失败', error);
-            app.extensionManager.toast.add({
-                severity: 'error',
-                summary: '保存失败',
-                detail: error.message,
-                life: 3000
-            });
-        }
-    }
-
-    /**
-     * 创建百度翻译标签页
-     */
-    _createBaiduTab() {
-        const pane = document.createElement('div');
-        pane.className = 'tab-pane';
-        pane.dataset.tab = 'baidu';
-
-        const section = createFormGroup('百度翻译配置', [
-            { text: '开通百度翻译服务', url: 'https://fanyi-api.baidu.com/' }
-        ]);
-        section.classList.add('baidu-translate-section');
-
-        // 为链接添加图标,与其他服务保持统一
-        const linkElement = section.querySelector('.settings-service-link');
-        if (linkElement) {
-            const icon = document.createElement('i');
-            icon.className = 'pi pi-star';
-            icon.style.marginRight = '4px';
-            linkElement.insertBefore(icon, linkElement.firstChild);
-        }
-
-        const appIdInput = createInputGroup('AppID', '请输入百度翻译 AppID');
-        appIdInput.input.value = this.baiduConfig.app_id || '';
-        appIdInput.input.addEventListener('input', (e) => {
-            this.baiduConfig.app_id = e.target.value;
-        });
-        // 添加失焦保存
-        appIdInput.input.addEventListener('blur', async () => {
-            await this._saveBaiduConfig();
-        });
-
-        const secretInput = createInputGroup('Secret Key', '请输入百度翻译密钥');
-        secretInput.input.type = 'password';
-        secretInput.input.value = this.baiduConfig.secret_key || '';
-        secretInput.input.addEventListener('input', (e) => {
-            this.baiduConfig.secret_key = e.target.value;
-        });
-        // 添加失焦保存
-        secretInput.input.addEventListener('blur', async () => {
-            await this._saveBaiduConfig();
-        });
-
-        section.appendChild(appIdInput.group);
-        section.appendChild(secretInput.group);
-        pane.appendChild(section);
-
-        return pane;
     }
 
     /**
@@ -2118,8 +1938,9 @@ class APIConfigManager {
                         // 自动切换到百度翻译标签
                         const header = document.querySelector('.tab-header');
                         const contentContainer = document.querySelector('.tab-content');
-                        if (header && contentContainer) {
-                            this._switchTab('baidu', header, contentContainer);
+                        const fallbackTabId = this.services[0]?.id;
+                        if (header && contentContainer && fallbackTabId) {
+                            this._switchTab(fallbackTabId, header, contentContainer);
                         }
 
                         // 如果是最后一个服务商，显示空提示
