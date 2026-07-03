@@ -40,7 +40,9 @@ const SERVICE_TYPES = {
         filterKey: 'llm_models',
         includeGoogle: true,
         includeBaidu: true,
-        includeArgos: true
+        includeArgos: true,
+        includeDeepL: true,
+        includeYoudao: true
     },
     llm: {
         name: '提示詞優化',
@@ -158,6 +160,12 @@ const serviceSelector = {
         if (config.includeArgos) {
             options.push({ value: 'argos', text: 'Argos Translate（本地）' });
         }
+        if (config.includeDeepL) {
+            options.push({ value: 'deepl', text: 'DeepL 翻譯' });
+        }
+        if (config.includeYoudao) {
+            options.push({ value: 'youdao', text: '有道翻譯' });
+        }
 
         // 過濾並添加其他服務
         services
@@ -175,19 +183,32 @@ const serviceSelector = {
         return options;
     },
 
-    /** 機械翻譯選項（Google / 百度 / Argos 本地） */
+    /** 機械翻譯選項 */
     getMachineTranslateOptions() {
         return [
             { value: 'google', text: 'Google 翻譯' },
             { value: 'baidu', text: '百度翻譯' },
-            { value: 'argos', text: 'Argos Translate（本地）' }
+            { value: 'argos', text: 'Argos Translate（本地）' },
+            { value: 'deepl', text: 'DeepL 翻譯' },
+            { value: 'youdao', text: '有道翻譯' }
+        ];
+    },
+
+    /** 機械翻譯 fallback（確保 UI 永遠有選項） */
+    getMachineTranslateFallbackOptions() {
+        return [
+            { value: 'google', text: 'Google 翻譯' },
+            { value: 'baidu', text: '百度翻譯' },
+            { value: 'argos', text: 'Argos Translate（本地）' },
+            { value: 'deepl', text: 'DeepL 翻譯' },
+            { value: 'youdao', text: '有道翻譯' }
         ];
     },
 
     /** 當前機械翻譯服務；若目前為 LLM 則顯示預設 google */
     async getCurrentMachineTranslate() {
         const current = await this.getCurrentService('translate');
-        if (current === 'google' || current === 'baidu' || current === 'argos') {
+        if (current === 'google' || current === 'baidu' || current === 'argos' || current === 'deepl' || current === 'youdao') {
             return current;
         }
         return 'google';
@@ -366,7 +387,7 @@ function createServiceSelector(type, label, opts = {}) {
             }
 
             // 獲取服務列表和當前選中的服務
-            const [options, currentService] = await Promise.all([
+            const [rawOptions, currentService] = await Promise.all([
                 machineOnly
                     ? serviceSelector.getMachineTranslateOptions()
                     : serviceSelector.getServiceOptions(type),
@@ -374,6 +395,12 @@ function createServiceSelector(type, label, opts = {}) {
                     ? serviceSelector.getCurrentMachineTranslate()
                     : serviceSelector.getCurrentService(type)
             ]);
+
+            let options = Array.isArray(rawOptions) ? rawOptions : [];
+            if (machineOnly && options.length === 0) {
+                options = serviceSelector.getMachineTranslateFallbackOptions();
+                logger.warn(`[${label}] 機械翻譯選項為空，已使用 fallback 列表`);
+            }
 
             // 如果已經存在下拉框實例，則嘗試增量更新
             if (updateDropdownOptions) {
@@ -895,23 +922,6 @@ export function registerSettings() {
                     }
                 },
 
-                // 機械翻譯服務（Google / 百度）
-                {
-                    id: "PromptAssistant.MachineTranslate.Provider",
-                    name: "選擇機械翻譯",
-                    category: ["✨提示詞小助手", " 翻譯功能設置", "機械翻譯"],
-                    tooltip: "block 文字翻譯使用的機械翻譯服務（Google、百度或 Argos 本地）。選擇後會切換翻譯服務；若需使用大語言模型翻譯，請在「配置 > 翻譯 > 選擇翻譯服務」中選擇。",
-                    type: () => createServiceSelector('translate', '機械翻譯', { machineOnly: true })
-                },
-
-                {
-                    id: "PromptAssistant.Argos.LanguagePacks",
-                    name: "Argos 語言包",
-                    category: ["✨提示詞小助手", " 翻譯功能設置", "機械翻譯"],
-                    tooltip: "Argos 本地翻譯需安裝離線語言包。未安裝時可點擊「安裝」按鈕下載（首次需聯網，約數百 MB）。",
-                    type: () => ArgosLanguagePack.createSettingsRow()
-                },
-
                 // 使用翻译缓存功能
                 {
                     id: "PromptAssistant.Features.UseTranslateCache",
@@ -1110,6 +1120,42 @@ export function registerSettings() {
                         FEATURES.mixedLangTranslateRule = value;
                         logger.log(`混合語言翻譯規則 - 已設置為:${value}`);
                     }
+                },
+                {
+                    id: "PromptAssistant.Features.MachineTranslateProvider",
+                    name: "選擇機械翻譯",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "混合語言規則"],
+                    type: "combo",
+                    options: [
+                        { text: "Google 翻譯", value: "google" },
+                        { text: "百度翻譯", value: "baidu" },
+                        { text: "Argos Translate（本地）", value: "argos" },
+                        { text: "DeepL 翻譯", value: "deepl" },
+                        { text: "有道翻譯", value: "youdao" }
+                    ],
+                    defaultValue: "google",
+                    tooltip: "block 文字翻譯使用的機械翻譯服務。若需使用大語言模型翻譯，請在「配置 > 翻譯 > 選擇翻譯服務」中選擇。",
+                    onChange: async (value) => {
+                        try {
+                            const ok = await serviceSelector.setCurrentService("translate", value);
+                            if (!ok) {
+                                logger.error(`切換機械翻譯失敗 | provider=${value}`);
+                            } else {
+                                logger.log(`機械翻譯服務 - 已設置為:${value}`);
+                            }
+                        } catch (e) {
+                            logger.error(`切換機械翻譯異常 | ${e.message}`);
+                        }
+                    }
+                },
+
+                // Argos 語言包
+                {
+                    id: "PromptAssistant.Argos.LanguagePacks",
+                    name: "Argos 語言包",
+                    category: ["✨提示詞小助手", " 翻譯功能設置", "機械翻譯"],
+                    tooltip: "Argos 本地翻譯需安裝離線語言包。未安裝時可點擊「安裝」按鈕下載（首次需聯網，約數百 MB）。",
+                    type: () => ArgosLanguagePack.createSettingsRow()
                 },
 
                 // 翻譯格式化選項
@@ -1416,6 +1462,30 @@ export function registerSettings() {
                 },
 
             ]
+        });
+
+        // 同步機械翻譯 combo 與後端當前服務（與右鍵選單、配置頁互通）
+        const machineTranslateSettingId = "PromptAssistant.Features.MachineTranslateProvider";
+        const syncMachineTranslateSetting = async () => {
+            try {
+                const current = await serviceSelector.getCurrentMachineTranslate();
+                if (!current || !app.ui?.settings?.setSettingValue) return;
+                const stored = app.ui.settings.getSettingValue(machineTranslateSettingId);
+                if (stored !== current) {
+                    app.ui.settings.setSettingValue(machineTranslateSettingId, current);
+                }
+            } catch (e) {
+                logger.warn(`同步機械翻譯設定失敗: ${e.message}`);
+            }
+        };
+        syncMachineTranslateSetting();
+        window.addEventListener("pa-service-changed", (e) => {
+            const detail = e.detail || {};
+            if (detail.service_type !== "translate") return;
+            const id = detail.service_id;
+            if (["google", "baidu", "argos", "deepl", "youdao"].includes(id) && app.ui?.settings?.setSettingValue) {
+                app.ui.settings.setSettingValue(machineTranslateSettingId, id);
+            }
         });
 
         logger.log("小助手設置註冊成功");

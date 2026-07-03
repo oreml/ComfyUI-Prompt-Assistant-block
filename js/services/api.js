@@ -600,6 +600,70 @@ class APIService {
         }
     }
 
+    static async deeplTranslate(text, from = 'auto', to = 'zh', request_id = null, is_auto = false) {
+        if (!request_id) {
+            request_id = this.generateRequestId('trans', 'deepl');
+        }
+        const controller = new AbortController();
+        const signal = controller.signal;
+        runningRequests.set(request_id, controller);
+        try {
+            if (!text || text.trim() === '') {
+                throw new Error('待翻译文本不能为空');
+            }
+            const apiUrl = this.getApiUrl('deepl/translate');
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, from, to, request_id, is_auto }),
+                signal
+            });
+            return await response.json();
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                logger.debug(`DeepL 翻译请求被用户中止 | ID: ${request_id}`);
+                return { success: false, error: '请求已取消', cancelled: true };
+            }
+            return { success: false, error: error.message };
+        } finally {
+            if (runningRequests.has(request_id)) {
+                runningRequests.delete(request_id);
+            }
+        }
+    }
+
+    static async youdaoTranslate(text, from = 'auto', to = 'zh', request_id = null, is_auto = false) {
+        if (!request_id) {
+            request_id = this.generateRequestId('trans', 'youdao');
+        }
+        const controller = new AbortController();
+        const signal = controller.signal;
+        runningRequests.set(request_id, controller);
+        try {
+            if (!text || text.trim() === '') {
+                throw new Error('待翻译文本不能为空');
+            }
+            const apiUrl = this.getApiUrl('youdao/translate');
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, from, to, request_id, is_auto }),
+                signal
+            });
+            return await response.json();
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                logger.debug(`有道翻译请求被用户中止 | ID: ${request_id}`);
+                return { success: false, error: '请求已取消', cancelled: true };
+            }
+            return { success: false, error: error.message };
+        } finally {
+            if (runningRequests.has(request_id)) {
+                runningRequests.delete(request_id);
+            }
+        }
+    }
+
     /** Argos 語言包狀態 */
     static async argosStatus() {
         const response = await fetch(this.getApiUrl('/argos/status'));
@@ -637,7 +701,7 @@ class APIService {
     }
 
     /**
-     * 批量翻译（根据当前翻译服务类型选择 Google、百度或 Argos）
+     * 批量翻译（根据当前翻译服务类型选择机器翻译提供商）
      */
     static async batchMachineTranslate(texts, from = 'auto', to = 'zh', provider = 'google') {
         try {
@@ -648,6 +712,8 @@ class APIService {
                 google: this.googleTranslate.bind(this),
                 baidu: this.baiduTranslate.bind(this),
                 argos: this.argosTranslate.bind(this),
+                deepl: this.deeplTranslate.bind(this),
+                youdao: this.youdaoTranslate.bind(this),
             };
             const translateOne = translateMap[provider] || this.googleTranslate.bind(this);
             const results = [];

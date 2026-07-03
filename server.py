@@ -4,6 +4,8 @@ from .config_manager import config_manager
 from .services.baidu import BaiduTranslateService
 from .services.google import GoogleTranslateService
 from .services.argos import ArgosTranslateService
+from .services.deepl import DeepLTranslateService
+from .services.youdao import YoudaoTranslateService
 from .services.llm import LLMService
 from .services.vlm import VisionService
 from .services.model_list import get_models_from_service
@@ -1149,6 +1151,51 @@ async def update_baidu_translate_config(request):
         print(f"{ERROR_PREFIX} 百度翻译配置更新异常 | 错误:{str(e)}")
         return web.json_response({'error': str(e)}, status=500)
 
+@PromptServer.instance.routes.get(f'{API_PREFIX}/config/deepl_translate')
+async def get_deepl_translate_config(request):
+    """获取 DeepL 翻译配置"""
+    config = config_manager.get_deepl_translate_config()
+    return web.json_response(config)
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/config/deepl_translate')
+async def update_deepl_translate_config(request):
+    """更新 DeepL 翻译配置"""
+    try:
+        data, err = await _read_json_body(request, "config/deepl_translate")
+        if err is not None:
+            return err
+        api_key = data.get('api_key')
+        success = config_manager.update_deepl_translate_config(api_key=api_key)
+        if success:
+            return web.json_response({'message': '配置已更新'})
+        return web.json_response({'error': '配置更新失败'}, status=500)
+    except Exception as e:
+        print(f"{ERROR_PREFIX} DeepL 翻译配置更新异常 | 错误:{str(e)}")
+        return web.json_response({'error': str(e)}, status=500)
+
+@PromptServer.instance.routes.get(f'{API_PREFIX}/config/youdao_translate')
+async def get_youdao_translate_config(request):
+    """获取有道翻译配置"""
+    config = config_manager.get_youdao_translate_config()
+    return web.json_response(config)
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/config/youdao_translate')
+async def update_youdao_translate_config(request):
+    """更新有道翻译配置"""
+    try:
+        data, err = await _read_json_body(request, "config/youdao_translate")
+        if err is not None:
+            return err
+        app_key = data.get('app_key')
+        app_secret = data.get('app_secret')
+        success = config_manager.update_youdao_translate_config(app_key=app_key, app_secret=app_secret)
+        if success:
+            return web.json_response({'message': '配置已更新'})
+        return web.json_response({'error': '配置更新失败'}, status=500)
+    except Exception as e:
+        print(f"{ERROR_PREFIX} 有道翻译配置更新异常 | 错误:{str(e)}")
+        return web.json_response({'error': str(e)}, status=500)
+
 @PromptServer.instance.routes.post(f'{API_PREFIX}/config/system_prompts')
 async def update_system_prompts_config(request):
     """更新系统提示词配置"""
@@ -1548,6 +1595,74 @@ async def argos_translate(request):
     except Exception as e:
         error_msg = str(e)
         print(f"{ERROR_PREFIX} Argos 翻译请求异常 | 错误:{error_msg}")
+        return web.json_response({"success": False, "error": error_msg})
+    finally:
+        if request_id and request_id in ACTIVE_TASKS:
+            del ACTIVE_TASKS[request_id]
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/deepl/translate')
+async def deepl_translate(request):
+    """DeepL 翻译 API"""
+    request_id = None
+    try:
+        data = await request.json()
+        text = data.get("text")
+        from_lang = data.get("from", "auto")
+        to_lang = data.get("to", "zh")
+        if to_lang == "zh":
+            translate_config = config_manager.get_translate_config()
+            to_lang = translate_config.get("target_chinese", "zh-TW")
+        request_id = data.get("request_id")
+        is_auto = data.get("is_auto", False)
+        if not request_id:
+            return web.json_response({"success": False, "error": "缺少request_id"}, status=400)
+        from_lang_name = {"auto": "自动", "zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(from_lang, from_lang)
+        to_lang_name = {"zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(to_lang, to_lang)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_FRONTEND, "DeepL 翻译", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
+        task = asyncio.create_task(DeepLTranslateService.translate(text, from_lang, to_lang, request_id, is_auto, task_type=TASK_TRANSLATE, source=SOURCE_FRONTEND))
+        ACTIVE_TASKS[request_id] = task
+        result = await task
+        return web.json_response(result)
+    except asyncio.CancelledError:
+        print(f"\r{_ANSI_CLEAR_EOL}{WARN_PREFIX} DeepL 翻译任务被取消 | ID:{request_id}", flush=True)
+        return web.json_response({"success": False, "error": "请求已取消", "cancelled": True}, status=400)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"{ERROR_PREFIX} DeepL 翻译请求异常 | 错误:{error_msg}")
+        return web.json_response({"success": False, "error": error_msg})
+    finally:
+        if request_id and request_id in ACTIVE_TASKS:
+            del ACTIVE_TASKS[request_id]
+
+@PromptServer.instance.routes.post(f'{API_PREFIX}/youdao/translate')
+async def youdao_translate(request):
+    """有道翻译 API"""
+    request_id = None
+    try:
+        data = await request.json()
+        text = data.get("text")
+        from_lang = data.get("from", "auto")
+        to_lang = data.get("to", "zh")
+        if to_lang == "zh":
+            translate_config = config_manager.get_translate_config()
+            to_lang = translate_config.get("target_chinese", "zh-TW")
+        request_id = data.get("request_id")
+        is_auto = data.get("is_auto", False)
+        if not request_id:
+            return web.json_response({"success": False, "error": "缺少request_id"}, status=400)
+        from_lang_name = {"auto": "自动", "zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(from_lang, from_lang)
+        to_lang_name = {"zh": "中文", "zh-TW": "繁中", "zh-CN": "簡中", "en": "英文"}.get(to_lang, to_lang)
+        log_prepare(TASK_TRANSLATE, request_id, SOURCE_FRONTEND, "有道翻译", None, None, {"方向": f"{from_lang_name}→{to_lang_name}", "长度": len(text)})
+        task = asyncio.create_task(YoudaoTranslateService.translate(text, from_lang, to_lang, request_id, is_auto, task_type=TASK_TRANSLATE, source=SOURCE_FRONTEND))
+        ACTIVE_TASKS[request_id] = task
+        result = await task
+        return web.json_response(result)
+    except asyncio.CancelledError:
+        print(f"\r{_ANSI_CLEAR_EOL}{WARN_PREFIX} 有道翻译任务被取消 | ID:{request_id}", flush=True)
+        return web.json_response({"success": False, "error": "请求已取消", "cancelled": True}, status=400)
+    except Exception as e:
+        error_msg = str(e)
+        print(f"{ERROR_PREFIX} 有道翻译请求异常 | 错误:{error_msg}")
         return web.json_response({"success": False, "error": error_msg})
     finally:
         if request_id and request_id in ACTIVE_TASKS:

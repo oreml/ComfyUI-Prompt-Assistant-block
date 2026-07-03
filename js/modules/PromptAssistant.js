@@ -2216,12 +2216,16 @@ class PromptAssistant {
                                 let result;
                                 let streamContent = '';  // 用于流式收集内容
                                 let isArgos = false;
+                                let isDeepL = false;
+                                let isYoudao = false;
                                 try {
                                     // 獲取翻譯配置
                                     const configResp = await fetch(APIService.getApiUrl('/config/translate'));
                                     let isGoogle = false;
                                     let isBaidu = false;
                                     isArgos = false;
+                                    isDeepL = false;
+                                    isYoudao = false;
 
                                     if (configResp.ok) {
                                         const config = await configResp.json();
@@ -2231,6 +2235,10 @@ class PromptAssistant {
                                             isBaidu = true;
                                         } else if (config.provider === 'argos') {
                                             isArgos = true;
+                                        } else if (config.provider === 'deepl') {
+                                            isDeepL = true;
+                                        } else if (config.provider === 'youdao') {
+                                            isYoudao = true;
                                         }
                                     }
 
@@ -2250,6 +2258,20 @@ class PromptAssistant {
                                         );
                                     } else if (isArgos) {
                                         result = await APIService.argosTranslate(
+                                            contentToTranslate,
+                                            langResult.from,
+                                            langResult.to,
+                                            request_id
+                                        );
+                                    } else if (isDeepL) {
+                                        result = await APIService.deeplTranslate(
+                                            contentToTranslate,
+                                            langResult.from,
+                                            langResult.to,
+                                            request_id
+                                        );
+                                    } else if (isYoudao) {
+                                        result = await APIService.youdaoTranslate(
                                             contentToTranslate,
                                             langResult.from,
                                             langResult.to,
@@ -2467,6 +2489,56 @@ class PromptAssistant {
                                 logger.log(`翻譯服務切換 | 服務: Argos Translate`);
                                 window.dispatchEvent(new CustomEvent('pa-service-changed', {
                                     detail: { service_type: 'translate', service_id: 'argos' }
+                                }));
+                            } catch (err) {
+                                logger.error(`切換翻譯服務失敗: ${err.message}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'error', `切換失敗: ${err.message}`);
+                            }
+                        }
+                    });
+
+                    // DeepL 翻譯
+                    const isDeepLCurrent = currentTranslateService === 'deepl';
+                    serviceMenuItems.push({
+                        label: 'DeepL 翻譯',
+                        icon: `<span class="pi ${isDeepLCurrent ? 'pi-check-circle active-status' : 'pi-circle-off inactive-status'}"></span>`,
+                        onClick: async (context) => {
+                            try {
+                                const res = await fetch(APIService.getApiUrl('/services/current'), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ service_type: 'translate', service_id: 'deepl' })
+                                });
+                                if (!res.ok) throw new Error(`服務器返回錯誤: ${res.status}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'success', `已切換到: DeepL 翻譯`);
+                                logger.log(`翻譯服務切換 | 服務: DeepL 翻譯`);
+                                window.dispatchEvent(new CustomEvent('pa-service-changed', {
+                                    detail: { service_type: 'translate', service_id: 'deepl' }
+                                }));
+                            } catch (err) {
+                                logger.error(`切換翻譯服務失敗: ${err.message}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'error', `切換失敗: ${err.message}`);
+                            }
+                        }
+                    });
+
+                    // 有道翻譯
+                    const isYoudaoCurrent = currentTranslateService === 'youdao';
+                    serviceMenuItems.push({
+                        label: '有道翻譯',
+                        icon: `<span class="pi ${isYoudaoCurrent ? 'pi-check-circle active-status' : 'pi-circle-off inactive-status'}"></span>`,
+                        onClick: async (context) => {
+                            try {
+                                const res = await fetch(APIService.getApiUrl('/services/current'), {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ service_type: 'translate', service_id: 'youdao' })
+                                });
+                                if (!res.ok) throw new Error(`服務器返回錯誤: ${res.status}`);
+                                UIToolkit.showStatusTip(context.buttonElement, 'success', `已切換到: 有道翻譯`);
+                                logger.log(`翻譯服務切換 | 服務: 有道翻譯`);
+                                window.dispatchEvent(new CustomEvent('pa-service-changed', {
+                                    detail: { service_type: 'translate', service_id: 'youdao' }
                                 }));
                             } catch (err) {
                                 logger.error(`切換翻譯服務失敗: ${err.message}`);

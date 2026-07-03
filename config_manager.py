@@ -672,6 +672,16 @@ class ConfigManager:
         config = self.load_config()
         return config.get("baidu_translate", self.default_config.get("baidu_translate", {"app_id": "", "secret_key": ""}))
 
+    def get_deepl_translate_config(self):
+        """获取 DeepL 翻译配置"""
+        config = self.load_config()
+        return config.get("deepl_translate", self.default_config.get("deepl_translate", {"api_key": ""}))
+
+    def get_youdao_translate_config(self):
+        """获取有道翻译配置"""
+        config = self.load_config()
+        return config.get("youdao_translate", self.default_config.get("youdao_translate", {"app_key": "", "app_secret": ""}))
+
     def get_llm_config(self):
         """获取LLM配置"""
         config = self.load_config()
@@ -895,6 +905,35 @@ class ConfigManager:
                 "top_p": 0.9,
                 "providers": {}
             })
+
+        # DeepL 翻译特殊处理
+        if current_service_id == 'deepl':
+            deepl_config = self.get_deepl_translate_config()
+            return with_target_chinese({
+                "provider": "deepl",
+                "model": "",
+                "base_url": "",
+                "api_key": deepl_config.get("api_key", ""),
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "top_p": 0.9,
+                "providers": {}
+            })
+
+        # 有道翻译特殊处理
+        if current_service_id == 'youdao':
+            youdao_config = self.get_youdao_translate_config()
+            return with_target_chinese({
+                "provider": "youdao",
+                "model": "",
+                "base_url": "",
+                "api_key": youdao_config.get("app_key", ""),
+                "app_secret": youdao_config.get("app_secret", ""),
+                "temperature": 0.7,
+                "max_tokens": 1000,
+                "top_p": 0.9,
+                "providers": {}
+            })
         
         # 查找对应的LLM服务
         service = self._get_service_by_id(current_service_id)
@@ -1015,6 +1054,26 @@ class ConfigManager:
         if secret_key is not None:
             config["baidu_translate"]["secret_key"] = secret_key
 
+        return self.save_config(config)
+
+    def update_deepl_translate_config(self, api_key=None):
+        """更新 DeepL 翻译配置"""
+        config = self.load_config()
+        if "deepl_translate" not in config:
+            config["deepl_translate"] = {}
+        if api_key is not None:
+            config["deepl_translate"]["api_key"] = api_key
+        return self.save_config(config)
+
+    def update_youdao_translate_config(self, app_key=None, app_secret=None):
+        """更新有道翻译配置"""
+        config = self.load_config()
+        if "youdao_translate" not in config:
+            config["youdao_translate"] = {}
+        if app_key is not None:
+            config["youdao_translate"]["app_key"] = app_key
+        if app_secret is not None:
+            config["youdao_translate"]["app_secret"] = app_secret
         return self.save_config(config)
 
     def set_translate_target_chinese(self, target_chinese: str) -> bool:
@@ -1698,6 +1757,48 @@ class ConfigManager:
                 }
                 if self.save_config(config):
                     self._log(f"当前服务商已切换: Argos Translate ({service_type})")
+                    return True
+                return False
+
+            # ---DeepL 翻譯---
+            if service_id == 'deepl':
+                if service_type not in ['translate']:
+                    self._log(f"设置当前服务商失败: DeepL 不支持{service_type}服务类型")
+                    return False
+                if 'current_services' not in config:
+                    config['current_services'] = {}
+                if 'deepl_translate' not in config:
+                    config['deepl_translate'] = {"api_key": ""}
+                prev = config['current_services'].get(service_type)
+                prev_chinese = prev.get('target_chinese', 'zh-TW') if isinstance(prev, dict) else 'zh-TW'
+                config['current_services'][service_type] = {
+                    "service": "deepl",
+                    "model": "",
+                    "target_chinese": prev_chinese,
+                }
+                if self.save_config(config):
+                    self._log(f"当前服务商已切换: DeepL ({service_type})")
+                    return True
+                return False
+
+            # ---有道翻譯---
+            if service_id == 'youdao':
+                if service_type not in ['translate']:
+                    self._log(f"设置当前服务商失败: 有道翻译不支持{service_type}服务类型")
+                    return False
+                if 'current_services' not in config:
+                    config['current_services'] = {}
+                if 'youdao_translate' not in config:
+                    config['youdao_translate'] = {"app_key": "", "app_secret": ""}
+                prev = config['current_services'].get(service_type)
+                prev_chinese = prev.get('target_chinese', 'zh-TW') if isinstance(prev, dict) else 'zh-TW'
+                config['current_services'][service_type] = {
+                    "service": "youdao",
+                    "model": "",
+                    "target_chinese": prev_chinese,
+                }
+                if self.save_config(config):
+                    self._log(f"当前服务商已切换: 有道翻译 ({service_type})")
                     return True
                 return False
             

@@ -8,6 +8,13 @@
         "app_id": "",
         "secret_key": ""
     },
+    "deepl_translate": {
+        "api_key": ""
+    },
+    "youdao_translate": {
+        "app_key": "",
+        "app_secret": ""
+    },
     "model_services": [
         {
             "id": "openrouter",
